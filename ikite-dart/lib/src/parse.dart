@@ -112,18 +112,20 @@ mixin IKiteParser {
       return null;
     }
     if (jObject is! Map) {
-      assert(false, "Only json object is allowed to parse but ${jObject.runtimeType}.");
+      assert(false,
+          "Only json object is allowed to parse but ${jObject.runtimeType}.");
       return null;
     } else {
       final versionMap = jObject["@versionMap"];
       if (versionMap is! Map) {
-        assert(false, "@versionMap must be a Map but ${versionMap.runtimeType}.");
+        assert(
+            false, "@versionMap must be a Map but ${versionMap.runtimeType}.");
       } else {
         try {
           final rootAdapter = _type2Adapters[T];
           if (rootAdapter is! IKiteDataAdapter<T>) {
-            assert(
-                false, "The adapter of root object doesn't match its type $T but $rootAdapter.");
+            assert(false,
+                "The adapter of root object doesn't match its type $T but $rootAdapter.");
             return null;
           } else {
             final ctx = ParseContext(
@@ -223,6 +225,38 @@ class ParseContext {
       }
       return null;
     }
+  }
+
+  List<T?> parseFormJsonNullableListByTypeName<T>(List<dynamic> list) {
+    final res = <T?>[];
+    for (final obj in list) {
+      res.add(parseFromJsonByTypeName<T>(obj));
+    }
+    return res;
+  }
+
+  List<T> parseFormJsonNonnullListByTypeName<T>(List<dynamic> list) {
+    final res = <T>[];
+    for (final obj in list) {
+      res.add(parseFromJsonByTypeName<T>(obj) as T);
+    }
+    return res;
+  }
+
+  List<T?> parseFormJsonNullableListByExactType<T>(List<dynamic> list) {
+    final res = <T?>[];
+    for (final obj in list) {
+      res.add(parseFromJsonByExactType<T>(obj));
+    }
+    return res;
+  }
+
+  List<T> parseFormJsonNonnullListByExactType<T>(List<dynamic> list) {
+    final res = <T>[];
+    for (final obj in list) {
+      res.add(parseFromJsonByExactType<T>(obj) as T);
+    }
+    return res;
   }
 }
 

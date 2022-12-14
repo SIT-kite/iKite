@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ master ]
 jobs:
-  lint:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Repository
@@ -18,5 +18,4 @@ jobs:
         run: |
           cd ikite-dart
           dart pub get
-          dart analyze
           dart test

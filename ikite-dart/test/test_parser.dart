@@ -95,7 +95,7 @@ void main() {
       assert(group != null);
       assert(group!.c.firstName == "Justice");
     });
-    test("Convert json to an object with list", () {
+    test("Convert json to an object with list by exact type", () {
       final parser = Parser();
       parser.registerAdapter(StudentDataAdapter());
       parser.registerAdapter(LearningGroupByExactTypeDataAdapter());
@@ -182,6 +182,7 @@ class StudentDataAdapter implements IKiteDataAdapter<Student> {
     throw UnimplementedError();
   }
 }
+
 class LearningGroup {
   final Student a;
   final Student b;
@@ -243,13 +244,9 @@ class CourseDataAdapter implements IKiteDataAdapter<Course> {
 
   @override
   Course fromJson(ParseContext ctx, Map<String, dynamic> json) {
-    final groups = <LearningGroup>[];
-    for (final group in json["groups"]) {
-      groups.add(ctx.parseFromJsonByExactType<LearningGroup>(group)!);
-    }
     return Course(
       json["name"] as String,
-      groups,
+      ctx.parseFormJsonNonnullListByExactType<LearningGroup>(json["groups"]),
     );
   }
 
