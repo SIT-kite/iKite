@@ -67,7 +67,7 @@ mixin IKiteParser {
             final rootAdapter = _name2Adapters[rootTypeName];
             if (rootAdapter is! IKiteDataAdapter<T>) {
               assert(false,
-                  "The adapter of root object doesn't match its type. $T");
+                  "The adapter of root object doesn't match its type $T but $rootAdapter.");
               return null;
             } else {
               final ctx = ParseContext(
@@ -123,7 +123,7 @@ mixin IKiteParser {
           final rootAdapter = _type2Adapters[T];
           if (rootAdapter is! IKiteDataAdapter<T>) {
             assert(
-                false, "The adapter of root object doesn't match its type. $T");
+                false, "The adapter of root object doesn't match its type $T but $rootAdapter.");
             return null;
           } else {
             final ctx = ParseContext(
