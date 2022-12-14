@@ -23,7 +23,7 @@ void main() {
   "email": "NarcisseChan@kite.com"
 }
     """;
-      final student = parser.parseFromJson<Student>(rawJson);
+      final student = parser.parseFromJsonByTypeName<Student>(rawJson);
       assert(student != null);
       assert(student!.firstName == "Narcisse");
       assert(student!.lastName == "Chan");
@@ -58,7 +58,7 @@ void main() {
   }
 }
     """;
-      final group = parser.parseFromJson<LearningGroup>(rawJson);
+      final group = parser.parseFromJsonByTypeName<LearningGroup>(rawJson);
       assert(group != null);
       assert(group!.b.email == "MoanaEllery@kite.com");
     });
@@ -93,7 +93,7 @@ void main() {
   }
 }
     """;
-      final group = parser.parseFromJson<LearningGroup>(rawJson);
+      final group = parser.parseFromJsonByTypeName<LearningGroup>(rawJson);
       assert(group != null);
       assert(group!.c.firstName == "Justice");
     });

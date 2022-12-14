@@ -41,7 +41,7 @@ mixin IKiteParser {
   ///
   /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
   /// In debug mode, the assert will be failed.
-  T? parseFromJson<T>(String json) {
+  T? parseFromJsonByTypeName<T>(String json) {
     final dynamic jObject;
     try {
       jObject = jsonDecode(json);
@@ -58,23 +58,80 @@ mixin IKiteParser {
         assert(false, "@versionMap must be a Map.");
       } else {
         try {
-          final ctx = ParseContext(
-            _name2Adapters,
-            _type2Adapters,
-            versionMap.cast<String, int>(),
-          );
           final rootTypeName = jObject["@type"];
           if (rootTypeName is! String) {
-            assert(false, "The @type of root object must be a String.$rootTypeName");
+            assert(false,
+                "The @type of root object must be a String.$rootTypeName");
             return null;
           } else {
             final rootAdapter = _name2Adapters[rootTypeName];
             if (rootAdapter is! IKiteDataAdapter<T>) {
-              assert(false, "The adapter of root object doesn't match its type. $T");
+              assert(false,
+                  "The adapter of root object doesn't match its type. $T");
               return null;
             } else {
+              final ctx = ParseContext(
+                _name2Adapters,
+                _type2Adapters,
+                versionMap.cast<String, int>(),
+              );
               return rootAdapter.fromJson(ctx, jObject.cast<String, dynamic>());
             }
+          }
+        } catch (e) {
+          assert(false, "Cannot parse object from json. $e");
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Parse an object of [T] from an json object by [json].
+  /// [json] as a root must have a version map:
+  /// ```json
+  /// {
+  ///   "@type": "kite.Student",
+  ///   "@versionMap":{
+  ///     "kite.Credential": 1,
+  ///     "kite.Parent": 1
+  ///   }
+  /// }
+  /// ```
+  /// The version map is used to determine how many types are used and what their versions exactly are in this object.
+  /// It's useful to do migration if the versions are not matched.
+  ///
+  /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
+  /// In debug mode, the assert will be failed.
+  T? parseFromJsonByExactType<T>(String json) {
+    final dynamic jObject;
+    try {
+      jObject = jsonDecode(json);
+    } catch (e) {
+      assert(false, 'Cannot decode json from "json". $e');
+      return null;
+    }
+    if (jObject is! Map) {
+      assert(false, "Only json object is allowed to parse but ${jObject.runtimeType}.");
+      return null;
+    } else {
+      final versionMap = jObject["@versionMap"];
+      if (versionMap is! Map) {
+        assert(false, "@versionMap must be a Map but ${versionMap.runtimeType}.");
+      } else {
+        try {
+          final rootAdapter = _type2Adapters[T];
+          if (rootAdapter is! IKiteDataAdapter<T>) {
+            assert(
+                false, "The adapter of root object doesn't match its type. $T");
+            return null;
+          } else {
+            final ctx = ParseContext(
+              _name2Adapters,
+              _type2Adapters,
+              versionMap.cast<String, int>(),
+            );
+            return rootAdapter.fromJson(ctx, jObject.cast<String, dynamic>());
           }
         } catch (e) {
           assert(false, "Cannot parse object from json. $e");
@@ -150,7 +207,7 @@ class ParseContext {
   T? parseFromJsonByTypeName<T>(Map<String, dynamic> json) {
     final typeName = json["@type"];
     if (typeName is! String) {
-      assert(false, "@type must be a String. $typeName");
+      assert(false, "@type must be a String but $typeName.");
       return null;
     } else {
       final adapter = _name2Adapters[typeName];
