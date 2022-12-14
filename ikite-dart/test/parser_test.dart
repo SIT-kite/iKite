@@ -307,8 +307,7 @@ class CourseDataAdapter extends DataAdapter<Course> {
     return {
       "@type": typeName,
       "name": obj.name,
-      "groups":
-          obj.groups.map((e) => ctx.parseToJson(e)).toList(growable: false),
+      "groups": ctx.parseToNonnullList(obj.groups),
     };
   }
 }

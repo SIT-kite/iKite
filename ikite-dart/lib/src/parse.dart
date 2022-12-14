@@ -191,7 +191,8 @@ class RestoreContext {
   final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, int> _versionMap;
 
-  const RestoreContext(this._name2Adapters, this._type2Adapters, this._versionMap);
+  const RestoreContext(
+      this._name2Adapters, this._type2Adapters, this._versionMap);
 
   DataAdapter<T>? findAdapterOf<T>(String typeName) {
     final adapter = _name2Adapters[typeName];
@@ -256,7 +257,6 @@ class RestoreContext {
     }
   }
 
-
   List<T?> restoreNullableListByTypeName<T>(List<dynamic> list) {
     final res = <T?>[];
     for (final obj in list) {
@@ -307,6 +307,16 @@ class ParseContext {
       addToVersionMap(adapter);
       return adapter.toJson(this, obj);
     }
+  }
+
+  List<Map<String, dynamic>> parseToNonnullList<T>(List<T> list) {
+    return list.map((e) => parseToJson(e)).toList(growable: false);
+  }
+
+  List<Map<String, dynamic>?> parseToNullableList<T>(List<T?> list) {
+    return list
+        .map((e) => e != null ? parseToJson(e) : null)
+        .toList(growable: false);
   }
 
   void addToVersionMap(DataAdapter adapter) {
