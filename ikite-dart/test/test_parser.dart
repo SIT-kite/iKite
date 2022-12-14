@@ -1,4 +1,4 @@
-import 'package:ikite_dart/ikite_dart.dart';
+import 'package:ikite/ikite.dart';
 import 'package:test/test.dart';
 
 void main() {
