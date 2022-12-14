@@ -1,7 +1,7 @@
 import 'package:ikite/src/parse.dart';
 import 'package:test/test.dart';
 
-class Parser with IKiteParser {}
+class Parser with IKiteConverter {}
 
 void main() {
   group('Test Adapter convert json to object', () {
@@ -19,7 +19,7 @@ void main() {
   "email": "NarcisseChan@kite.com"
 }
     """;
-      final student = parser.parseFromJsonByTypeName<Student>(rawJson);
+      final student = parser.restoreByTypeName<Student>(rawJson);
       assert(student != null);
       assert(student!.firstName == "Narcisse");
       assert(student!.lastName == "Chan");
@@ -54,7 +54,7 @@ void main() {
   }
 }
     """;
-      final group = parser.parseFromJsonByTypeName<LearningGroup>(rawJson);
+      final group = parser.restoreByTypeName<LearningGroup>(rawJson);
       assert(group != null);
       assert(group!.b.email == "MoanaEllery@kite.com");
     });
@@ -89,7 +89,7 @@ void main() {
   }
 }
     """;
-      final group = parser.parseFromJsonByTypeName<LearningGroup>(rawJson);
+      final group = parser.restoreByTypeName<LearningGroup>(rawJson);
       assert(group != null);
       assert(group!.c.firstName == "Justice");
     });
@@ -145,7 +145,7 @@ void main() {
   ]
 }
       """;
-      final course = parser.parseFromJsonByTypeName(rawJson);
+      final course = parser.restoreByTypeName(rawJson);
       assert(course != null);
       assert(course!.name == "Compiler");
       assert(course!.groups.length == 2);
@@ -162,7 +162,7 @@ void main() {
       assert(json != null);
       assert(json!.contains("NarcisseChan@kite.com"));
 
-      final restored = parser.parseFromJsonByExactType<Student>(json!);
+      final restored = parser.restoreByExactType<Student>(json!);
       assert(restored != null);
       assert(restored!.firstName == "Narcisse");
     });
@@ -188,7 +188,7 @@ void main() {
       assert(json!.contains("@versionMap"));
       assert(json!.contains("X@email.net"));
 
-      final restored = parser.parseFromJsonByTypeName<Course>(json!);
+      final restored = parser.restoreByTypeName<Course>(json!);
       assert(restored != null);
       assert(restored!.groups[1].b.lastName == "Y2");
     });
@@ -208,7 +208,7 @@ class StudentDataAdapter extends DataAdapter<Student> {
   String get typeName => "kite.Student";
 
   @override
-  Student fromJson(ParseContext ctx, Map<String, dynamic> json) {
+  Student fromJson(RestoreContext ctx, Map<String, dynamic> json) {
     return Student(
       json["firstName"] as String,
       json["lastName"] as String,
@@ -240,11 +240,11 @@ class LearningGroupByTypeNameDataAdapter extends DataAdapter<LearningGroup> {
   String get typeName => "kite.LearningGroup";
 
   @override
-  LearningGroup fromJson(ParseContext ctx, Map<String, dynamic> json) {
+  LearningGroup fromJson(RestoreContext ctx, Map<String, dynamic> json) {
     return LearningGroup(
-      ctx.parseFromJsonByTypeName<Student>(json["a"])!,
-      ctx.parseFromJsonByTypeName<Student>(json["b"])!,
-      ctx.parseFromJsonByTypeName<Student>(json["c"])!,
+      ctx.restoreByTypeName<Student>(json["a"])!,
+      ctx.restoreByTypeName<Student>(json["b"])!,
+      ctx.restoreByTypeName<Student>(json["c"])!,
     );
   }
 
@@ -264,11 +264,11 @@ class LearningGroupByExactTypeDataAdapter extends DataAdapter<LearningGroup> {
   String get typeName => "kite.LearningGroup";
 
   @override
-  LearningGroup fromJson(ParseContext ctx, Map<String, dynamic> json) {
+  LearningGroup fromJson(RestoreContext ctx, Map<String, dynamic> json) {
     return LearningGroup(
-      ctx.parseFromJsonByExactType<Student>(json["a"])!,
-      ctx.parseFromJsonByExactType<Student>(json["b"])!,
-      ctx.parseFromJsonByExactType<Student>(json["c"])!,
+      ctx.restoreByExactType<Student>(json["a"])!,
+      ctx.restoreByExactType<Student>(json["b"])!,
+      ctx.restoreByExactType<Student>(json["c"])!,
     );
   }
 
@@ -295,10 +295,10 @@ class CourseDataAdapter extends DataAdapter<Course> {
   String get typeName => "kite.Course";
 
   @override
-  Course fromJson(ParseContext ctx, Map<String, dynamic> json) {
+  Course fromJson(RestoreContext ctx, Map<String, dynamic> json) {
     return Course(
       json["name"] as String,
-      ctx.parseFormJsonNonnullListByExactType<LearningGroup>(json["groups"]),
+      ctx.restoreNonnullListByExactType<LearningGroup>(json["groups"]),
     );
   }
 

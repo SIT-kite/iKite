@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-/// [IKiteParser] mixin is used to convert object from/to json.
-mixin IKiteParser {
+/// [IKiteConverter] mixin is used to convert object from/to json.
+mixin IKiteConverter {
   final Map<String, DataAdapter> _name2Adapters = {};
   final Map<Type, DataAdapter> _type2Adapters = {};
 
@@ -41,7 +41,7 @@ mixin IKiteParser {
   ///
   /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
   /// In debug mode, the assert will be failed.
-  T? parseFromJsonByTypeName<T>(String json) {
+  T? restoreByTypeName<T>(String json) {
     final dynamic jObject;
     try {
       jObject = jsonDecode(json);
@@ -70,7 +70,7 @@ mixin IKiteParser {
                   "The adapter of root object doesn't match its type $T but $rootAdapter.");
               return null;
             } else {
-              final ctx = ParseContext(
+              final ctx = RestoreContext(
                 _name2Adapters,
                 _type2Adapters,
                 versionMap.cast<String, int>(),
@@ -102,7 +102,7 @@ mixin IKiteParser {
   ///
   /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
   /// In debug mode, the assert will be failed.
-  T? parseFromJsonByExactType<T>(String json) {
+  T? restoreByExactType<T>(String json) {
     final dynamic jObject;
     try {
       jObject = jsonDecode(json);
@@ -127,7 +127,7 @@ mixin IKiteParser {
                 "The adapter of root object doesn't match its type $T but $rootAdapter.");
             return null;
           } else {
-            final ctx = ParseContext(
+            final ctx = RestoreContext(
               _name2Adapters,
               _type2Adapters,
               versionMap.cast<String, int>(),
@@ -160,7 +160,7 @@ mixin IKiteParser {
       try {
         json = adapter.toJson(ctx, obj);
       } catch (e) {
-        assert(false, 'Cannot parse $obj to json.');
+        assert(false, 'Cannot convert $obj to json.');
         return null;
       }
       ctx.attachVersionMap(json);
@@ -176,7 +176,7 @@ abstract class DataAdapter<T> {
   int get version => 1;
 
   /// Convert a json object to an object of [T].
-  T fromJson(ParseContext ctx, Map<String, dynamic> json);
+  T fromJson(RestoreContext ctx, Map<String, dynamic> json);
 
   /// Convert a [T] object to json object.
   Map<String, dynamic> toJson(ParseContext ctx, T obj);
@@ -186,42 +186,41 @@ abstract class Migration<T> {
   String get typeName;
 }
 
-class ParseContext {
+class RestoreContext {
   final Map<String, DataAdapter> _name2Adapters;
   final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, int> _versionMap;
 
-  const ParseContext(
-      this._name2Adapters, this._type2Adapters, this._versionMap);
+  const RestoreContext(this._name2Adapters, this._type2Adapters, this._versionMap);
 
-  /// Throw [NoSuchDataAdapterException] if [typeName] doesn't correspond to a [DataAdapter]
-  DataAdapter<T> findAdapterBy<T>(String typeName) {
+  DataAdapter<T>? findAdapterOf<T>(String typeName) {
     final adapter = _name2Adapters[typeName];
-    if (adapter == null) {
-      throw NoSuchDataAdapterException(typeName);
+    if (adapter is! DataAdapter<T>) {
+      assert(false, 'Cannot find adapter of $typeName but $adapter.');
+      return null;
     } else {
-      return adapter as DataAdapter<T>;
+      return adapter;
     }
   }
 
   /// Find an adapter specified with the key,"@type", in the [json].
-  /// Throw [NoTypeSpecifiedException] if [json] doesn't have the key,"@type", or "@type" is not a String.
-  /// Throw [NoSuchDataAdapterException] if "@type" doesn't correspond to a [DataAdapter].
-  DataAdapter<T> findAdapterIn<T>(Map<String, dynamic> json) {
+  DataAdapter<T>? findAdapterIn<T>(Map<String, dynamic> json) {
     final typeName = json["@type"];
     if (typeName is! String) {
-      throw NoTypeSpecifiedException(json);
+      assert(false, '@type must be a String but $typeName.');
+      return null;
     } else {
       final adapter = _name2Adapters[typeName];
-      if (adapter == null) {
-        throw NoSuchDataAdapterException(typeName);
+      if (adapter is! DataAdapter<T>) {
+        assert(false, 'Cannot find adapter of $typeName but $adapter.');
+        return null;
       } else {
-        return adapter as DataAdapter<T>;
+        return adapter;
       }
     }
   }
 
-  T? parseFromJsonByExactType<T>(Map<String, dynamic> json) {
+  T? restoreByExactType<T>(Map<String, dynamic> json) {
     final adapter = _type2Adapters[T];
     assert(adapter != null, 'Cannot find adapter of $T.');
     if (adapter != null) {
@@ -236,7 +235,7 @@ class ParseContext {
     return null;
   }
 
-  T? parseFromJsonByTypeName<T>(Map<String, dynamic> json) {
+  T? restoreByTypeName<T>(Map<String, dynamic> json) {
     final typeName = json["@type"];
     if (typeName is! String) {
       assert(false, "@type must be a String but $typeName.");
@@ -257,6 +256,49 @@ class ParseContext {
     }
   }
 
+
+  List<T?> restoreNullableListByTypeName<T>(List<dynamic> list) {
+    final res = <T?>[];
+    for (final obj in list) {
+      res.add(restoreByTypeName<T>(obj));
+    }
+    return res;
+  }
+
+  List<T> restoreNonnullListByTypeName<T>(List<dynamic> list) {
+    final res = <T>[];
+    for (final obj in list) {
+      res.add(restoreByTypeName<T>(obj) as T);
+    }
+    return res;
+  }
+
+  List<T?> restoreNullableListByExactType<T>(List<dynamic> list) {
+    final res = <T?>[];
+    for (final obj in list) {
+      res.add(restoreByExactType<T>(obj));
+    }
+    return res;
+  }
+
+  List<T> restoreNonnullListByExactType<T>(List<dynamic> list) {
+    final res = <T>[];
+    for (final obj in list) {
+      res.add(restoreByExactType<T>(obj) as T);
+    }
+    return res;
+  }
+}
+
+class ParseContext {
+  final Map<String, DataAdapter> _name2Adapters;
+  final Map<Type, DataAdapter> _type2Adapters;
+  final Map<String, int> _versionMap;
+  final bool enableTypeAnnotation;
+
+  const ParseContext(this._name2Adapters, this._type2Adapters, this._versionMap,
+      {this.enableTypeAnnotation = true});
+
   Map<String, dynamic> parseToJson<T>(T obj) {
     final adapter = _type2Adapters[T];
     if (adapter is! DataAdapter<T>) {
@@ -274,38 +316,6 @@ class ParseContext {
   void attachVersionMap(Map<String, dynamic> json) {
     json["@versionMap"] = _versionMap;
   }
-
-  List<T?> parseFormJsonNullableListByTypeName<T>(List<dynamic> list) {
-    final res = <T?>[];
-    for (final obj in list) {
-      res.add(parseFromJsonByTypeName<T>(obj));
-    }
-    return res;
-  }
-
-  List<T> parseFormJsonNonnullListByTypeName<T>(List<dynamic> list) {
-    final res = <T>[];
-    for (final obj in list) {
-      res.add(parseFromJsonByTypeName<T>(obj) as T);
-    }
-    return res;
-  }
-
-  List<T?> parseFormJsonNullableListByExactType<T>(List<dynamic> list) {
-    final res = <T?>[];
-    for (final obj in list) {
-      res.add(parseFromJsonByExactType<T>(obj));
-    }
-    return res;
-  }
-
-  List<T> parseFormJsonNonnullListByExactType<T>(List<dynamic> list) {
-    final res = <T>[];
-    for (final obj in list) {
-      res.add(parseFromJsonByExactType<T>(obj) as T);
-    }
-    return res;
-  }
 }
 
 class NoSuchDataAdapterException implements Exception {
@@ -313,11 +323,3 @@ class NoSuchDataAdapterException implements Exception {
 
   const NoSuchDataAdapterException(this.message);
 }
-
-class NoTypeSpecifiedException implements Exception {
-  final Map<String, dynamic> json;
-
-  const NoTypeSpecifiedException(this.json);
-}
-
-class OverVersionException implements Exception {}
