@@ -2,17 +2,24 @@ import 'dart:convert';
 
 /// [IKiteParser] mixin is used to convert object from/to json.
 mixin IKiteParser {
-  final Map<String, IKiteDataAdapter> _adapters = {};
+  final Map<String, IKiteDataAdapter> _name2Adapters = {};
+  final Map<Type, IKiteDataAdapter> _type2Adapters = {};
 
   /// Register the [adapter].
   /// If the [adapter.typeName] was registered, the old one will be overridden.
+  /// In debug mode, the assert will be failed.
   void registerAdapter<T>(IKiteDataAdapter<T> adapter) {
-    _adapters[adapter.typeName] = adapter;
+    assert(!_name2Adapters.containsKey(adapter.typeName),
+        "Two adapters with the same type should be avoided.");
+    assert(!_type2Adapters.containsKey(T),
+        "Two adapters with the same type should be avoided.");
+    _name2Adapters[adapter.typeName] = adapter;
+    _type2Adapters[T] = adapter;
   }
 
   /// Return whether this [typeName] has been registered.
   bool hasAdapterWith({required String typeName}) =>
-      _adapters.containsKey(typeName);
+      _name2Adapters.containsKey(typeName);
 
   /// Parse an object of [T] from an json object by [json].
   /// [json] as a root must have a version map:
@@ -35,7 +42,7 @@ mixin IKiteParser {
     try {
       jObject = jsonDecode(json);
     } catch (e) {
-      assert(false, 'Cannot decode json from "$json".$e');
+      assert(false, 'Cannot decode json from "$json". $e');
       return null;
     }
     if (jObject is! Map) {
@@ -47,15 +54,16 @@ mixin IKiteParser {
         assert(false, "@versionMap must be a Map.");
       } else {
         try {
-          final ctx = ParseContext(_adapters, versionMap.cast<String, int>());
+          final ctx =
+              ParseContext(_name2Adapters, versionMap.cast<String, int>());
           final rootType = jObject["@type"];
           if (rootType is! String) {
             assert(false, "RootType must be a String.");
             return null;
           } else {
-            final rootAdapter = _adapters[rootType];
+            final rootAdapter = _name2Adapters[rootType];
             if (rootAdapter is! IKiteDataAdapter<T>) {
-              assert(false, "RootAdapter doesn't match its type.$T");
+              assert(false, "RootAdapter doesn't match its type. $T");
               return null;
             } else {
               return rootAdapter.fromJson(ctx, jObject.cast<String, dynamic>());
