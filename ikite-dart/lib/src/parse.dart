@@ -21,6 +21,10 @@ mixin IKiteParser {
   bool hasAdapterWith({required String typeName}) =>
       _name2Adapters.containsKey(typeName);
 
+  /// Return whether this [typeName] has been registered.
+  bool removeAdapterWith({required String typeName}) =>
+      _name2Adapters.containsKey(typeName);
+
   /// Parse an object of [T] from an json object by [json].
   /// [json] as a root must have a version map:
   /// ```json
@@ -42,7 +46,7 @@ mixin IKiteParser {
     try {
       jObject = jsonDecode(json);
     } catch (e) {
-      assert(false, 'Cannot decode json from "$json". $e');
+      assert(false, 'Cannot decode json from "json". $e');
       return null;
     }
     if (jObject is! Map) {
@@ -54,23 +58,26 @@ mixin IKiteParser {
         assert(false, "@versionMap must be a Map.");
       } else {
         try {
-          final ctx =
-              ParseContext(_name2Adapters, versionMap.cast<String, int>());
-          final rootType = jObject["@type"];
-          if (rootType is! String) {
-            assert(false, "RootType must be a String.");
+          final ctx = ParseContext(
+            _name2Adapters,
+            _type2Adapters,
+            versionMap.cast<String, int>(),
+          );
+          final rootTypeName = jObject["@type"];
+          if (rootTypeName is! String) {
+            assert(false, "The @type of root object must be a String.$rootTypeName");
             return null;
           } else {
-            final rootAdapter = _name2Adapters[rootType];
+            final rootAdapter = _name2Adapters[rootTypeName];
             if (rootAdapter is! IKiteDataAdapter<T>) {
-              assert(false, "RootAdapter doesn't match its type. $T");
+              assert(false, "The adapter of root object doesn't match its type. $T");
               return null;
             } else {
               return rootAdapter.fromJson(ctx, jObject.cast<String, dynamic>());
             }
           }
         } catch (e) {
-          assert(false, "Cannot parse object from $json. $e");
+          assert(false, "Cannot parse object from json. $e");
           return null;
         }
       }
@@ -87,18 +94,20 @@ abstract class IKiteDataAdapter<T> {
   T fromJson(ParseContext ctx, Map<String, dynamic> json);
 
   /// Convert a [T] object to json object.
-  Map<String, dynamic> toJson(ParseContext ctx, Map<String, dynamic> json);
+  Map<String, dynamic> toJson(ParseContext ctx, T obj);
 }
 
 class ParseContext {
-  final Map<String, IKiteDataAdapter> _adapters;
+  final Map<String, IKiteDataAdapter> _name2Adapters;
+  final Map<Type, IKiteDataAdapter> _type2Adapters;
   final Map<String, int> _versionMap;
 
-  const ParseContext(this._adapters, this._versionMap);
+  const ParseContext(
+      this._name2Adapters, this._type2Adapters, this._versionMap);
 
   /// Throw [NoSuchDataAdapterException] if [typeName] doesn't correspond to a [IKiteDataAdapter]
   IKiteDataAdapter<T> findAdapterBy<T>(String typeName) {
-    final adapter = _adapters[typeName];
+    final adapter = _name2Adapters[typeName];
     if (adapter == null) {
       throw NoSuchDataAdapterException(typeName);
     } else {
@@ -114,12 +123,48 @@ class ParseContext {
     if (typeName is! String) {
       throw NoTypeSpecifiedException(json);
     } else {
-      final adapter = _adapters[typeName];
+      final adapter = _name2Adapters[typeName];
       if (adapter == null) {
         throw NoSuchDataAdapterException(typeName);
       } else {
         return adapter as IKiteDataAdapter<T>;
       }
+    }
+  }
+
+  T? parseFromJsonByExactType<T>(Map<String, dynamic> json) {
+    final adapter = _type2Adapters[T];
+    assert(adapter != null, 'Cannot find adapter of $T.');
+    if (adapter != null) {
+      final res = adapter.fromJson(this, json);
+      if (res is T) {
+        return res;
+      } else {
+        assert(false, 'Cannot parse $T from json.');
+        return null;
+      }
+    }
+    return null;
+  }
+
+  T? parseFromJsonByTypeName<T>(Map<String, dynamic> json) {
+    final typeName = json["@type"];
+    if (typeName is! String) {
+      assert(false, "@type must be a String. $typeName");
+      return null;
+    } else {
+      final adapter = _name2Adapters[typeName];
+      assert(adapter != null, 'Cannot find adapter of "$typeName".');
+      if (adapter != null) {
+        final res = adapter.fromJson(this, json);
+        if (res is T) {
+          return res;
+        } else {
+          assert(false, 'Cannot parse $T from json.');
+          return null;
+        }
+      }
+      return null;
     }
   }
 }
