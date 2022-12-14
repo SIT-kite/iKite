@@ -2,13 +2,13 @@ import 'dart:convert';
 
 /// [IKiteParser] mixin is used to convert object from/to json.
 mixin IKiteParser {
-  final Map<String, IKiteDataAdapter> _name2Adapters = {};
-  final Map<Type, IKiteDataAdapter> _type2Adapters = {};
+  final Map<String, DataAdapter> _name2Adapters = {};
+  final Map<Type, DataAdapter> _type2Adapters = {};
 
   /// Register the [adapter].
   /// If the [adapter.typeName] was registered, the old one will be overridden.
   /// In debug mode, the assert will be failed.
-  void registerAdapter<T>(IKiteDataAdapter<T> adapter) {
+  void registerAdapter<T>(DataAdapter<T> adapter) {
     assert(!_name2Adapters.containsKey(adapter.typeName),
         "Two adapters with the same type should be avoided.");
     assert(!_type2Adapters.containsKey(T),
@@ -25,8 +25,8 @@ mixin IKiteParser {
   bool removeAdapterWith({required String typeName}) =>
       _name2Adapters.containsKey(typeName);
 
-  /// Parse an object of [T] from an json object by [json].
-  /// [json] as a root must have a version map:
+  /// Parse an object of [T] from an json object by its type name.
+  /// [json] as a root must have a type and a version map as mentioned below:
   /// ```json
   /// {
   ///   "@type": "kite.Student",
@@ -65,7 +65,7 @@ mixin IKiteParser {
             return null;
           } else {
             final rootAdapter = _name2Adapters[rootTypeName];
-            if (rootAdapter is! IKiteDataAdapter<T>) {
+            if (rootAdapter is! DataAdapter<T>) {
               assert(false,
                   "The adapter of root object doesn't match its type $T but $rootAdapter.");
               return null;
@@ -88,10 +88,9 @@ mixin IKiteParser {
   }
 
   /// Parse an object of [T] from an json object by [json].
-  /// [json] as a root must have a version map:
+  /// [json] as a root must have a version map as mentioned below:
   /// ```json
   /// {
-  ///   "@type": "kite.Student",
   ///   "@versionMap":{
   ///     "kite.Credential": 1,
   ///     "kite.Parent": 1
@@ -123,7 +122,7 @@ mixin IKiteParser {
       } else {
         try {
           final rootAdapter = _type2Adapters[T];
-          if (rootAdapter is! IKiteDataAdapter<T>) {
+          if (rootAdapter is! DataAdapter<T>) {
             assert(false,
                 "The adapter of root object doesn't match its type $T but $rootAdapter.");
             return null;
@@ -143,11 +142,38 @@ mixin IKiteParser {
     }
     return null;
   }
+
+  String? parseToJson<T>(T obj) {
+    final adapter = _type2Adapters[T];
+    if (adapter is! DataAdapter<T>) {
+      assert(false, 'Cannot find adapter of $T but $adapter.');
+      return null;
+    } else {
+      final versionMap = <String, int>{};
+      final ctx = ParseContext(
+        _name2Adapters,
+        _type2Adapters,
+        versionMap,
+      );
+      ctx.addToVersionMap(adapter);
+      final Map<String, dynamic> json;
+      try {
+        json = adapter.toJson(ctx, obj);
+      } catch (e) {
+        assert(false, 'Cannot parse $obj to json.');
+        return null;
+      }
+      ctx.attachVersionMap(json);
+      return jsonEncode(json);
+    }
+  }
 }
 
-abstract class IKiteDataAdapter<T> {
+abstract class DataAdapter<T> {
   /// It corresponds to key, "@type" in json.
   String get typeName;
+
+  int get version => 1;
 
   /// Convert a json object to an object of [T].
   T fromJson(ParseContext ctx, Map<String, dynamic> json);
@@ -156,28 +182,32 @@ abstract class IKiteDataAdapter<T> {
   Map<String, dynamic> toJson(ParseContext ctx, T obj);
 }
 
+abstract class Migration<T> {
+  String get typeName;
+}
+
 class ParseContext {
-  final Map<String, IKiteDataAdapter> _name2Adapters;
-  final Map<Type, IKiteDataAdapter> _type2Adapters;
+  final Map<String, DataAdapter> _name2Adapters;
+  final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, int> _versionMap;
 
   const ParseContext(
       this._name2Adapters, this._type2Adapters, this._versionMap);
 
-  /// Throw [NoSuchDataAdapterException] if [typeName] doesn't correspond to a [IKiteDataAdapter]
-  IKiteDataAdapter<T> findAdapterBy<T>(String typeName) {
+  /// Throw [NoSuchDataAdapterException] if [typeName] doesn't correspond to a [DataAdapter]
+  DataAdapter<T> findAdapterBy<T>(String typeName) {
     final adapter = _name2Adapters[typeName];
     if (adapter == null) {
       throw NoSuchDataAdapterException(typeName);
     } else {
-      return adapter as IKiteDataAdapter<T>;
+      return adapter as DataAdapter<T>;
     }
   }
 
   /// Find an adapter specified with the key,"@type", in the [json].
   /// Throw [NoTypeSpecifiedException] if [json] doesn't have the key,"@type", or "@type" is not a String.
-  /// Throw [NoSuchDataAdapterException] if "@type" doesn't correspond to a [IKiteDataAdapter].
-  IKiteDataAdapter<T> findAdapterIn<T>(Map<String, dynamic> json) {
+  /// Throw [NoSuchDataAdapterException] if "@type" doesn't correspond to a [DataAdapter].
+  DataAdapter<T> findAdapterIn<T>(Map<String, dynamic> json) {
     final typeName = json["@type"];
     if (typeName is! String) {
       throw NoTypeSpecifiedException(json);
@@ -186,7 +216,7 @@ class ParseContext {
       if (adapter == null) {
         throw NoSuchDataAdapterException(typeName);
       } else {
-        return adapter as IKiteDataAdapter<T>;
+        return adapter as DataAdapter<T>;
       }
     }
   }
@@ -225,6 +255,24 @@ class ParseContext {
       }
       return null;
     }
+  }
+
+  Map<String, dynamic> parseToJson<T>(T obj) {
+    final adapter = _type2Adapters[T];
+    if (adapter is! DataAdapter<T>) {
+      throw NoSuchDataAdapterException(obj.runtimeType.toString());
+    } else {
+      addToVersionMap(adapter);
+      return adapter.toJson(this, obj);
+    }
+  }
+
+  void addToVersionMap(DataAdapter adapter) {
+    _versionMap[adapter.typeName] = adapter.version;
+  }
+
+  void attachVersionMap(Map<String, dynamic> json) {
+    json["@versionMap"] = _versionMap;
   }
 
   List<T?> parseFormJsonNullableListByTypeName<T>(List<dynamic> list) {

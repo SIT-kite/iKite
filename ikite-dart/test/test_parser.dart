@@ -5,8 +5,6 @@ class Parser with IKiteParser {}
 
 void main() {
   group('Test Adapter convert json to object', () {
-    setUp(() {});
-
     test('Convert json to a 1-depth object', () {
       final parser = Parser();
       parser.registerAdapter(StudentDataAdapter());
@@ -154,6 +152,47 @@ void main() {
       assert(course!.groups[1].b.lastName == "Ekin");
     });
   });
+
+  group("Test Adapter convert object to json and back", () {
+    test("Convert Student to json and back", () {
+      final parser = Parser();
+      parser.registerAdapter(StudentDataAdapter());
+      final a = Student("Narcisse", "Chan", "NarcisseChan@kite.com");
+      final json = parser.parseToJson(a);
+      assert(json != null);
+      assert(json!.contains("NarcisseChan@kite.com"));
+
+      final restored = parser.parseFromJsonByExactType<Student>(json!);
+      assert(restored != null);
+      assert(restored!.firstName == "Narcisse");
+    });
+
+    test("Convert Course to json and back", () {
+      final parser = Parser();
+      parser.registerAdapter(StudentDataAdapter());
+      parser.registerAdapter(LearningGroupByExactTypeDataAdapter());
+      parser.registerAdapter(CourseDataAdapter());
+
+      final c = Course("Compiler", [
+        LearningGroup(
+            Student("A1", "A2", "A@email.net"),
+            Student("B1", "B2", "B@email.net"),
+            Student("C1", "C2", "C@email.net")),
+        LearningGroup(
+            Student("X1", "X2", "X@email.net"),
+            Student("Y1", "Y2", "Y@email.net"),
+            Student("Z1", "Z2", "Z@email.net")),
+      ]);
+      final json = parser.parseToJson(c);
+      assert(json != null);
+      assert(json!.contains("@versionMap"));
+      assert(json!.contains("X@email.net"));
+
+      final restored = parser.parseFromJsonByTypeName<Course>(json!);
+      assert(restored != null);
+      assert(restored!.groups[1].b.lastName == "Y2");
+    });
+  });
 }
 
 class Student {
@@ -164,7 +203,7 @@ class Student {
   Student(this.firstName, this.lastName, this.email);
 }
 
-class StudentDataAdapter implements IKiteDataAdapter<Student> {
+class StudentDataAdapter extends DataAdapter<Student> {
   @override
   String get typeName => "kite.Student";
 
@@ -179,7 +218,12 @@ class StudentDataAdapter implements IKiteDataAdapter<Student> {
 
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Student obj) {
-    throw UnimplementedError();
+    return {
+      "@type": typeName,
+      "firstName": obj.firstName,
+      "lastName": obj.lastName,
+      "email": obj.email,
+    };
   }
 }
 
@@ -191,8 +235,7 @@ class LearningGroup {
   LearningGroup(this.a, this.b, this.c);
 }
 
-class LearningGroupByTypeNameDataAdapter
-    implements IKiteDataAdapter<LearningGroup> {
+class LearningGroupByTypeNameDataAdapter extends DataAdapter<LearningGroup> {
   @override
   String get typeName => "kite.LearningGroup";
 
@@ -207,12 +250,16 @@ class LearningGroupByTypeNameDataAdapter
 
   @override
   Map<String, dynamic> toJson(ParseContext ctx, LearningGroup obj) {
-    throw UnimplementedError();
+    return {
+      "@type": typeName,
+      "a": ctx.parseToJson(obj.a),
+      "b": ctx.parseToJson(obj.b),
+      "c": ctx.parseToJson(obj.c),
+    };
   }
 }
 
-class LearningGroupByExactTypeDataAdapter
-    implements IKiteDataAdapter<LearningGroup> {
+class LearningGroupByExactTypeDataAdapter extends DataAdapter<LearningGroup> {
   @override
   String get typeName => "kite.LearningGroup";
 
@@ -227,7 +274,12 @@ class LearningGroupByExactTypeDataAdapter
 
   @override
   Map<String, dynamic> toJson(ParseContext ctx, LearningGroup obj) {
-    throw UnimplementedError();
+    return {
+      "@type": typeName,
+      "a": ctx.parseToJson(obj.a),
+      "b": ctx.parseToJson(obj.b),
+      "c": ctx.parseToJson(obj.c),
+    };
   }
 }
 
@@ -238,7 +290,7 @@ class Course {
   Course(this.name, this.groups);
 }
 
-class CourseDataAdapter implements IKiteDataAdapter<Course> {
+class CourseDataAdapter extends DataAdapter<Course> {
   @override
   String get typeName => "kite.Course";
 
@@ -252,6 +304,11 @@ class CourseDataAdapter implements IKiteDataAdapter<Course> {
 
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Course obj) {
-    throw UnimplementedError();
+    return {
+      "@type": typeName,
+      "name": obj.name,
+      "groups":
+          obj.groups.map((e) => ctx.parseToJson(e)).toList(growable: false),
+    };
   }
 }
