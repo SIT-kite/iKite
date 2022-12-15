@@ -18,6 +18,8 @@ mixin IKiteConverter {
     _type2Adapters[T] = adapter;
   }
 
+  /// Register the [migration].
+  /// And resort them by [Migration.migrateTo].
   void registerMigration<T>(Migration<T> migration) {
     final migrations = _name2Migrations[migration.typeName] ?? <Migration<T>>[];
     migrations.add(migration);
@@ -25,15 +27,23 @@ mixin IKiteConverter {
     _name2Migrations[migration.typeName] = migrations;
   }
 
-  /// Return whether this [typeName] has been registered.
-  bool hasAdapterWith({required String typeName}) =>
-      _name2Adapters.containsKey(typeName);
+  /// Return whether the adapter of [typeName] has been registered.
+  bool hasAdapterOf(String typeName) => _name2Adapters.containsKey(typeName);
 
-  /// Return whether this [typeName] has been registered.
-  bool removeAdapterWith({required String typeName}) =>
-      _name2Adapters.containsKey(typeName);
+  /// Return whether the migration of [typeName] has been registered.
+  /// If [to] is not null, the specific migration version will be checked.
+  bool hasMigrationOf(String typeName, {int? to}) {
+    if (to == null) {
+      return _name2Migrations.containsKey(typeName);
+    } else {
+      final migrations = _name2Migrations[typeName];
+      return migrations != null
+          ? migrations.any((m) => m.migrateTo == to)
+          : false;
+    }
+  }
 
-  /// Parse an object of [T] from an json object by its type name.
+  /// Restore an object of [T] from an json object by its type name.
   /// [json] as a root must have a type and a version map as mentioned below:
   /// ```json
   /// {
@@ -45,7 +55,7 @@ mixin IKiteConverter {
   /// }
   /// ```
   /// The version map is used to determine how many types are used and what their versions exactly are in this object.
-  /// It's useful to do migration if the versions are not matched.
+  /// If the versions between two json are not matched, the migrations will be performed in sequence.
   ///
   /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
   /// In debug mode, the assert will be failed.
@@ -105,7 +115,7 @@ mixin IKiteConverter {
     return null;
   }
 
-  /// Parse an object of [T] from an json object by [json].
+  /// Restore an object of [T] from an json object by [json].
   /// [json] as a root must have a version map as mentioned below:
   /// ```json
   /// {
@@ -116,7 +126,7 @@ mixin IKiteConverter {
   /// }
   /// ```
   /// The version map is used to determine how many types are used and what their versions exactly are in this object.
-  /// It's useful to do migration if the versions are not matched.
+  /// If the versions between two json are not matched, the migrations will be performed in sequence.
   ///
   /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
   /// In debug mode, the assert will be failed.
@@ -171,7 +181,12 @@ mixin IKiteConverter {
     return null;
   }
 
-  String? parseToJson<T>(T obj) {
+  /// Parse an object of [T] to Json.
+  /// The corresponding [DataAdapter] of [obj] should be registered.
+  ///
+  /// [enableTypeAnnotation]: When type annotation is enabled, the @type should be added in each json object.
+  /// If so, the restoration can determine the type dynamically.
+  String? parseToJson<T>(T obj, {bool enableTypeAnnotation = true}) {
     final adapter = _type2Adapters[T];
     if (adapter is! DataAdapter<T>) {
       assert(false, 'Cannot find adapter of $T but $adapter.');
@@ -181,6 +196,7 @@ mixin IKiteConverter {
       final ctx = ParseContext(
         _type2Adapters,
         versionMap,
+        enableTypeAnnotation: enableTypeAnnotation,
       );
       ctx.addToVersionMap(adapter);
       final Map<String, dynamic> json;
@@ -200,6 +216,8 @@ abstract class DataAdapter<T> {
   /// It corresponds to key, "@type" in json.
   String get typeName;
 
+  /// The [version] of this data adapter.
+  /// If it's higher than the json object, the available migrations will be performed.
   int get version => 1;
 
   /// Convert a json object to an object of [T].
@@ -209,22 +227,28 @@ abstract class DataAdapter<T> {
   Map<String, dynamic> toJson(ParseContext ctx, T obj);
 }
 
+/// [Migration] is designed to upgrade the data if the version of [DataAdapter] is higher.
 abstract class Migration<T> {
+  /// The unique [typeName].
+  /// Reserved domain is the naming convention.
   String get typeName;
 
+  /// The target version that will be migrated to.
   int get migrateTo;
 
-  Map<String, dynamic> migrate(Map<String, dynamic> from);
+  /// Migrate the [old] data to [migrateTo] version.
+  Map<String, dynamic> migrate(Map<String, dynamic> old);
 
+  /// Create a migration with delegate.
   factory Migration.of(
     String typeName,
     Map<String, dynamic> Function(Map<String, dynamic> from) delegate, {
     required int to,
   }) =>
-      _MigrationDelegate(to, typeName, delegate);
+      _MigrationDelegateImpl(to, typeName, delegate);
 }
 
-class _MigrationDelegate<T> implements Migration<T> {
+class _MigrationDelegateImpl<T> implements Migration<T> {
   @override
   final int migrateTo;
 
@@ -233,12 +257,13 @@ class _MigrationDelegate<T> implements Migration<T> {
 
   final Map<String, dynamic> Function(Map<String, dynamic> from) delegate;
 
-  _MigrationDelegate(this.migrateTo, this.typeName, this.delegate);
+  _MigrationDelegateImpl(this.migrateTo, this.typeName, this.delegate);
 
   @override
   Map<String, dynamic> migrate(Map<String, dynamic> from) => delegate(from);
 }
 
+/// Perform the migrations until the latest version in sequence.
 Map<String, dynamic> _doMigration(
   Map<String, List<Migration>> name2Migrations, {
   required Map<String, dynamic> from,
@@ -379,6 +404,9 @@ class RestoreContext {
 class ParseContext {
   final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, int> _versionMap;
+
+  /// When type annotation is enabled, the @type should be added in each json object.
+  /// If so, the restoration can determine the type dynamically.
   final bool enableTypeAnnotation;
 
   const ParseContext(this._type2Adapters, this._versionMap,
@@ -404,10 +432,12 @@ class ParseContext {
         .toList(growable: false);
   }
 
+  /// Add the [adapter.version] into the json.
   void addToVersionMap(DataAdapter adapter) {
     _versionMap[adapter.typeName] = adapter.version;
   }
 
+  /// Attach the version map into the json.
   void attachVersionMap(Map<String, dynamic> json) {
     json["@versionMap"] = _versionMap;
   }

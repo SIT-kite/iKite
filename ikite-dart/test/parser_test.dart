@@ -200,8 +200,8 @@ void main() {
       parser.registerAdapter(FreshmanDataAdapter());
       parser.registerAdapter(CounselorDataAdapter());
       parser.registerMigration(
-          Migration<Freshman>.of("kite.Freshman", to: 2, (from) {
-        final names = (from["name"] as String).split(" ");
+          Migration<Freshman>.of("kite.Freshman", to: 2, (old) {
+        final names = (old["name"] as String).split(" ");
         return {
           "firstName": names.isNotEmpty ? names[0] : "",
           "lastName": names.length > 1 ? names[1] : "",
@@ -210,25 +210,25 @@ void main() {
       parser.registerMigration(Migration<Freshman>.of(
           "kite.Freshman",
           to: 3,
-          (from) => {
-                "firstName": from["firstName"],
-                "lastName": from["lastName"],
+          (old) => {
+                "firstName": old["firstName"],
+                "lastName": old["lastName"],
                 "age": null,
               }));
       parser.registerMigration(Migration<Counselor>.of(
           "kite.Counselor",
           to: 2,
-          (from) => {
+          (old) => {
                 "name": "",
-                "students": from["students"],
+                "students": old["students"],
               }));
       parser.registerMigration(
-          Migration<Counselor>.of("kite.Counselor", to: 3, (from) {
-        final names = (from["name"] as String).split(" ");
+          Migration<Counselor>.of("kite.Counselor", to: 3, (old) {
+        final names = (old["name"] as String).split(" ");
         return {
           "firstName": names.isNotEmpty ? names[0] : "",
           "lastName": names.length > 1 ? names[1] : "",
-          "students": from["students"],
+          "students": old["students"],
         };
       }));
 
@@ -262,6 +262,8 @@ void main() {
       final counselor = parser.restoreByExactType<Counselor>(rawJson);
       assert(counselor != null);
       assert(counselor!.students[1].lastName == "Ellery");
+      final reJson = parser.parseToJson(counselor!);
+      assert(reJson!.contains('"kite.Counselor":3,"kite.Freshman":3'));
     });
   });
 }
