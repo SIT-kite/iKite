@@ -37,15 +37,15 @@ class DateTimeDataAdapter extends DataAdapter<DateTime> {
 
   @override
   DateTime fromJson(RestoreContext ctx, Map<String, dynamic> json) {
-    return DateTime.fromMillisecondsSinceEpoch(
-      json["milliseconds"],
-    );
+    return DateTime.fromMillisecondsSinceEpoch(json["millis"],
+        isUtc: json["isUtc"]);
   }
 
   @override
   Map<String, dynamic> toJson(ParseContext ctx, DateTime obj) {
     return {
-      "milliseconds": obj.millisecondsSinceEpoch,
+      "millis": obj.millisecondsSinceEpoch,
+      "isUtc": obj.isUtc,
     };
   }
 }
