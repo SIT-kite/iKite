@@ -193,6 +193,77 @@ void main() {
       assert(restored!.groups[1].b.lastName == "Y2");
     });
   });
+
+  group("Test Adapter convert json to object with migration", () {
+    test("Migrate from 1 to 3", () {
+      final parser = Parser();
+      parser.registerAdapter(FreshmanDataAdapter());
+      parser.registerAdapter(CounselorDataAdapter());
+      parser.registerMigration(
+          Migration<Freshman>.of("kite.Freshman", to: 2, (from) {
+        final names = (from["name"] as String).split(" ");
+        return {
+          "firstName": names.isNotEmpty ? names[0] : "",
+          "lastName": names.length > 1 ? names[1] : "",
+        };
+      }));
+      parser.registerMigration(Migration<Freshman>.of(
+          "kite.Freshman",
+          to: 3,
+          (from) => {
+                "firstName": from["firstName"],
+                "lastName": from["lastName"],
+                "age": null,
+              }));
+      parser.registerMigration(Migration<Counselor>.of(
+          "kite.Counselor",
+          to: 2,
+          (from) => {
+                "name": "",
+                "students": from["students"],
+              }));
+      parser.registerMigration(
+          Migration<Counselor>.of("kite.Counselor", to: 3, (from) {
+        final names = (from["name"] as String).split(" ");
+        return {
+          "firstName": names.isNotEmpty ? names[0] : "",
+          "lastName": names.length > 1 ? names[1] : "",
+          "students": from["students"],
+        };
+      }));
+
+      final rawJson = """
+{
+  "@type": "kite.Counselor",
+  "students": [
+    {
+      "@type": "kite.Freshman",
+      "name": "Narcisse Chan"
+    },
+    {
+      "@type": "kite.Freshman",
+      "name": "Moana Ellery"
+    },
+    {
+      "@type": "kite.Freshman",
+      "name": "Justice Apoorva"
+    },
+    {
+      "@type": "kite.Freshman",
+      "name": "Kohaku Erdem"
+    }
+  ],
+  "@versionMap": {
+    "kite.Counselor": 1,
+    "kite.Freshman": 1
+  }
+}
+    """;
+      final counselor = parser.restoreByExactType<Counselor>(rawJson);
+      assert(counselor != null);
+      assert(counselor!.students[1].lastName == "Ellery");
+    });
+  });
 }
 
 class Student {
@@ -200,7 +271,7 @@ class Student {
   final String lastName;
   final String email;
 
-  Student(this.firstName, this.lastName, this.email);
+  const Student(this.firstName, this.lastName, this.email);
 }
 
 class StudentDataAdapter extends DataAdapter<Student> {
@@ -232,7 +303,7 @@ class LearningGroup {
   final Student b;
   final Student c;
 
-  LearningGroup(this.a, this.b, this.c);
+  const LearningGroup(this.a, this.b, this.c);
 }
 
 class LearningGroupByTypeNameDataAdapter extends DataAdapter<LearningGroup> {
@@ -287,7 +358,7 @@ class Course {
   final String name;
   final List<LearningGroup> groups;
 
-  Course(this.name, this.groups);
+  const Course(this.name, this.groups);
 }
 
 class CourseDataAdapter extends DataAdapter<Course> {
@@ -308,6 +379,88 @@ class CourseDataAdapter extends DataAdapter<Course> {
       "@type": typeName,
       "name": obj.name,
       "groups": ctx.parseToNonnullList(obj.groups),
+    };
+  }
+}
+
+/// Version 2:
+/// - Removed "name" field.
+/// - Added "firstName" and "lastName" instead.
+///
+/// Version 3:
+/// - Added optional "age" field.
+class Freshman {
+  final String firstName;
+  final String lastName;
+  final int? age;
+
+  const Freshman(this.firstName, this.lastName, this.age);
+}
+
+class FreshmanDataAdapter extends DataAdapter<Freshman> {
+  @override
+  String get typeName => "kite.Freshman";
+
+  @override
+  int get version => 3;
+
+  @override
+  Freshman fromJson(RestoreContext ctx, Map<String, dynamic> json) {
+    return Freshman(
+      json["firstName"] as String,
+      json["lastName"] as String,
+      json["age"] as int?,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(ParseContext ctx, Freshman obj) {
+    return {
+      "@type": typeName,
+      "firstName": obj.firstName,
+      "lastName": obj.lastName,
+      "age": obj.age,
+    };
+  }
+}
+
+/// Version 2:
+/// - Added name.
+///
+/// Version 3:
+/// - Removed name.
+/// - Added "firstName" and "lastName" instead.
+class Counselor {
+  final String firstName;
+  final String lastName;
+  final List<Freshman> students;
+
+  const Counselor(this.students, this.firstName, this.lastName);
+}
+
+class CounselorDataAdapter extends DataAdapter<Counselor> {
+  @override
+  String get typeName => "kite.Counselor";
+
+  @override
+  int get version => 3;
+
+  @override
+  Counselor fromJson(RestoreContext ctx, Map<String, dynamic> json) {
+    return Counselor(
+      ctx.restoreNonnullListByExactType(json["students"]),
+      json["firstName"] as String,
+      json["lastName"] as String,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(ParseContext ctx, Counselor obj) {
+    return {
+      "@type": typeName,
+      "students": ctx.parseToNonnullList(obj.students),
+      "firstName": obj.firstName,
+      "lastName": obj.lastName,
     };
   }
 }

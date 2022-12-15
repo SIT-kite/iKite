@@ -4,6 +4,7 @@ import 'dart:convert';
 mixin IKiteConverter {
   final Map<String, DataAdapter> _name2Adapters = {};
   final Map<Type, DataAdapter> _type2Adapters = {};
+  final Map<String, List<Migration>> _name2Migrations = {};
 
   /// Register the [adapter].
   /// If the [adapter.typeName] was registered, the old one will be overridden.
@@ -15,6 +16,13 @@ mixin IKiteConverter {
         "Two adapters with the same type should be avoided.");
     _name2Adapters[adapter.typeName] = adapter;
     _type2Adapters[T] = adapter;
+  }
+
+  void registerMigration<T>(Migration<T> migration) {
+    final migrations = _name2Migrations[migration.typeName] ?? <Migration<T>>[];
+    migrations.add(migration);
+    migrations.sort((a, b) => a.migrateTo.compareTo(b.migrateTo));
+    _name2Migrations[migration.typeName] = migrations;
   }
 
   /// Return whether this [typeName] has been registered.
@@ -70,12 +78,22 @@ mixin IKiteConverter {
                   "The adapter of root object doesn't match its type $T but $rootAdapter.");
               return null;
             } else {
+              final versions = versionMap.cast<String, int>();
               final ctx = RestoreContext(
                 _name2Adapters,
                 _type2Adapters,
-                versionMap.cast<String, int>(),
+                _name2Migrations,
+                versions,
               );
-              return rootAdapter.fromJson(ctx, jObject.cast<String, dynamic>());
+              final version = versions[rootAdapter.typeName];
+              assert(version != null,
+                  "${rootAdapter.typeName} is not in version map.");
+              var jMap = jObject.cast<String, dynamic>();
+              if (version != null && version < rootAdapter.version) {
+                jMap = _doMigration(_name2Migrations,
+                    from: jMap, by: rootAdapter.typeName);
+              }
+              return rootAdapter.fromJson(ctx, jMap);
             }
           }
         } catch (e) {
@@ -127,12 +145,22 @@ mixin IKiteConverter {
                 "The adapter of root object doesn't match its type $T but $rootAdapter.");
             return null;
           } else {
+            final versions = versionMap.cast<String, int>();
             final ctx = RestoreContext(
               _name2Adapters,
               _type2Adapters,
-              versionMap.cast<String, int>(),
+              _name2Migrations,
+              versions,
             );
-            return rootAdapter.fromJson(ctx, jObject.cast<String, dynamic>());
+            final version = versions[rootAdapter.typeName];
+            assert(version != null,
+                "${rootAdapter.typeName} is not in version map.");
+            var jMap = jObject.cast<String, dynamic>();
+            if (version != null && version < rootAdapter.version) {
+              jMap = _doMigration(_name2Migrations,
+                  from: jMap, by: rootAdapter.typeName);
+            }
+            return rootAdapter.fromJson(ctx, jMap);
           }
         } catch (e) {
           assert(false, "Cannot parse object from json. $e");
@@ -151,7 +179,6 @@ mixin IKiteConverter {
     } else {
       final versionMap = <String, int>{};
       final ctx = ParseContext(
-        _name2Adapters,
         _type2Adapters,
         versionMap,
       );
@@ -184,15 +211,63 @@ abstract class DataAdapter<T> {
 
 abstract class Migration<T> {
   String get typeName;
+
+  int get migrateTo;
+
+  Map<String, dynamic> migrate(Map<String, dynamic> from);
+
+  factory Migration.of(
+    String typeName,
+    Map<String, dynamic> Function(Map<String, dynamic> from) delegate, {
+    required int to,
+  }) =>
+      _MigrationDelegate(to, typeName, delegate);
+}
+
+class _MigrationDelegate<T> implements Migration<T> {
+  @override
+  final int migrateTo;
+
+  @override
+  final String typeName;
+
+  final Map<String, dynamic> Function(Map<String, dynamic> from) delegate;
+
+  _MigrationDelegate(this.migrateTo, this.typeName, this.delegate);
+
+  @override
+  Map<String, dynamic> migrate(Map<String, dynamic> from) => delegate(from);
+}
+
+Map<String, dynamic> _doMigration(
+  Map<String, List<Migration>> name2Migrations, {
+  required Map<String, dynamic> from,
+  required String by,
+}) {
+  final migrations = name2Migrations[by];
+  assert(migrations != null, "No such migration of $by.");
+  if (migrations != null) {
+    for (final migration in migrations) {
+      from = migration.migrate(from);
+    }
+    return from;
+  } else {
+    return from;
+  }
 }
 
 class RestoreContext {
   final Map<String, DataAdapter> _name2Adapters;
   final Map<Type, DataAdapter> _type2Adapters;
+  final Map<String, List<Migration>> _name2Migrations;
   final Map<String, int> _versionMap;
 
   const RestoreContext(
-      this._name2Adapters, this._type2Adapters, this._versionMap);
+    this._name2Adapters,
+    this._type2Adapters,
+    this._name2Migrations,
+    this._versionMap,
+  );
 
   DataAdapter<T>? findAdapterOf<T>(String typeName) {
     final adapter = _name2Adapters[typeName];
@@ -225,6 +300,11 @@ class RestoreContext {
     final adapter = _type2Adapters[T];
     assert(adapter != null, 'Cannot find adapter of $T.');
     if (adapter != null) {
+      final version = _versionMap[adapter.typeName];
+      assert(version != null, "${adapter.typeName} is not in version map.");
+      if (version != null && version < adapter.version) {
+        json = _doMigration(_name2Migrations, from: json, by: adapter.typeName);
+      }
       final res = adapter.fromJson(this, json);
       if (res is T) {
         return res;
@@ -245,6 +325,12 @@ class RestoreContext {
       final adapter = _name2Adapters[typeName];
       assert(adapter != null, 'Cannot find adapter of "$typeName".');
       if (adapter != null) {
+        final version = _versionMap[adapter.typeName];
+        assert(version != null, "${adapter.typeName} is not in version map.");
+        if (version != null && version < adapter.version) {
+          json =
+              _doMigration(_name2Migrations, from: json, by: adapter.typeName);
+        }
         final res = adapter.fromJson(this, json);
         if (res is T) {
           return res;
@@ -291,12 +377,11 @@ class RestoreContext {
 }
 
 class ParseContext {
-  final Map<String, DataAdapter> _name2Adapters;
   final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, int> _versionMap;
   final bool enableTypeAnnotation;
 
-  const ParseContext(this._name2Adapters, this._type2Adapters, this._versionMap,
+  const ParseContext(this._type2Adapters, this._versionMap,
       {this.enableTypeAnnotation = true});
 
   Map<String, dynamic> parseToJson<T>(T obj) {
