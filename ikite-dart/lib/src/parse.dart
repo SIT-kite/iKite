@@ -191,8 +191,11 @@ mixin IKiteConverter {
   ///
   /// [enableTypeAnnotation]: When type annotation is enabled, the @type should be added in each json object.
   /// If so, the restoration can determine the type dynamically.
-  String? parseToJson<T>(T obj,
-      {bool enableTypeAnnotation = true, bool strict = false}) {
+  String? parseToJson<T>(
+    T obj, {
+    bool enableTypeAnnotation = true,
+    bool strict = false,
+  }) {
     final adapter = _type2Adapters[T];
     if (adapter is! DataAdapter<T>) {
       assert(false, 'Cannot find adapter of $T but $adapter.');
@@ -209,6 +212,9 @@ mixin IKiteConverter {
       final Map<String, dynamic> json;
       try {
         json = adapter.toJson(ctx, obj);
+        if (enableTypeAnnotation) {
+          json["@type"] = adapter.typeName;
+        }
       } catch (e) {
         if (strict) {
           rethrow;
@@ -474,7 +480,11 @@ class ParseContext {
       throw NoSuchDataAdapterException(obj.runtimeType.toString());
     } else {
       addToVersionMap(adapter);
-      return adapter.toJson(this, obj);
+      final json = adapter.toJson(this, obj);
+      if (enableTypeAnnotation) {
+        json["@type"] = adapter.typeName;
+      }
+      return json;
     }
   }
 

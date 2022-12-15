@@ -339,7 +339,6 @@ class StudentDataAdapter extends DataAdapter<Student> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Student obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "firstName": obj.firstName,
       "lastName": obj.lastName,
       "email": obj.email,
@@ -371,7 +370,6 @@ class LearningGroupByTypeNameDataAdapter extends DataAdapter<LearningGroup> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, LearningGroup obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "a": ctx.parseToJson(obj.a),
       "b": ctx.parseToJson(obj.b),
       "c": ctx.parseToJson(obj.c),
@@ -395,7 +393,6 @@ class LearningGroupByExactTypeDataAdapter extends DataAdapter<LearningGroup> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, LearningGroup obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "a": ctx.parseToJson(obj.a),
       "b": ctx.parseToJson(obj.b),
       "c": ctx.parseToJson(obj.c),
@@ -425,7 +422,6 @@ class CourseDataAdapter extends DataAdapter<Course> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Course obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "name": obj.name,
       "groups": ctx.parseToList(obj.groups),
     };
@@ -465,7 +461,6 @@ class FreshmanDataAdapter extends DataAdapter<Freshman> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Freshman obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "firstName": obj.firstName,
       "lastName": obj.lastName,
       "age": obj.age,
@@ -506,7 +501,6 @@ class CounselorDataAdapter extends DataAdapter<Counselor> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Counselor obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "students": ctx.parseToList(obj.students),
       "firstName": obj.firstName,
       "lastName": obj.lastName,
@@ -536,7 +530,6 @@ class TravellerDataAdapter extends DataAdapter<Traveller> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Traveller obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "name": obj.name,
       "id": obj.id,
     };
@@ -563,7 +556,6 @@ class AeroplaneDataAdapter extends DataAdapter<Aeroplane> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Aeroplane obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "seats": ctx.parseToNullableList(obj.seats),
     };
   }
@@ -596,7 +588,6 @@ class CheckInCounterDataAdapter extends DataAdapter<CheckInCounter> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, CheckInCounter obj) {
     return {
-      if (ctx.enableTypeAnnotation) "@type": typeName,
       "travellerId2Self": ctx.parseToMap(obj.travellerId2Self),
       "travellerId2Baggage": ctx.parseToNullableMap(obj.travellerId2Baggage),
     };

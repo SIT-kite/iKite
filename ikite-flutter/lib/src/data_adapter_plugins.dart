@@ -1,20 +1,21 @@
 import 'dart:ui';
-import 'package:ikite/src/parse.dart';
+import 'package:ikite/ikite.dart';
 
 class ColorDataAdapter extends DataAdapter<Color> {
   @override
+  String get typeName => "dart.ui.Color";
+
+  @override
   Color fromJson(RestoreContext ctx, Map<String, dynamic> json) {
-    // TODO: implement fromJson
-    throw UnimplementedError();
+    return Color(
+      json["value"] as int,
+    );
   }
 
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Color obj) {
-    // TODO: implement toJson
-    throw UnimplementedError();
+    return {
+      "value": obj.value
+    };
   }
-
-  @override
-  // TODO: implement typeName
-  String get typeName => throw UnimplementedError();
 }
