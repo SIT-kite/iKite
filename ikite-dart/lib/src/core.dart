@@ -9,13 +9,13 @@ class _IKiteImpl extends IKite {
 typedef IKitePlugin = void Function(IKite kite);
 
 extension IKitePluginEx on IKite {
-  void addPlugin(IKitePlugin plugin) {
+  void install(IKitePlugin plugin) {
     plugin(this);
   }
 
-  void addPlugins(List<IKitePlugin> plugins) {
+  void installAll(List<IKitePlugin> plugins) {
     for (final plugin in plugins) {
-      addPlugin(plugin);
+      install(plugin);
     }
   }
 }

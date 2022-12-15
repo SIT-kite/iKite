@@ -1,3 +1,4 @@
+library ikite;
 import 'dart:convert';
 
 part 'src/core.dart';
