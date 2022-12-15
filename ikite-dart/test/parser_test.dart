@@ -313,6 +313,34 @@ void main() {
       assert(restored.travellerId2Baggage["A102"] == 15);
     });
   });
+
+  group("Test nested list", () {
+    final parser = Parser();
+    parser.registerAdapter(NestedDataAdapter());
+    parser.registerAdapter(OuterDataAdapter());
+    test("Test nested list and nullable list", () {
+      final n1 = Nested(10);
+      final n2 = Nested(69);
+      final n3 = Nested(666);
+      final n4 = Nested(-111);
+
+      final outer = Outer(
+        [
+          [n1, n2],
+          [n3, n4]
+        ],
+        [
+          [1, 2, 3],
+          [null, 5, 6],
+          [7, 8, 9]
+        ],
+      );
+      final json = parser.parseToJson(outer, strict: true)!;
+      assert(json.contains("null"));
+      final restored = parser.restoreByTypeName(json,strict: true)!;
+      assert(restored.nested[0][1].id == 69);
+    });
+  });
 }
 
 class Student {
@@ -590,6 +618,59 @@ class CheckInCounterDataAdapter extends DataAdapter<CheckInCounter> {
     return {
       "travellerId2Self": ctx.parseToMap(obj.travellerId2Self),
       "travellerId2Baggage": ctx.parseToNullableMap(obj.travellerId2Baggage),
+    };
+  }
+}
+
+class Nested {
+  final int id;
+
+  Nested(this.id);
+}
+
+class Outer {
+  final List<List<Nested>> nested;
+  final List<List<int?>> string2d;
+
+  Outer(this.nested, this.string2d);
+}
+
+class NestedDataAdapter extends DataAdapter<Nested> {
+  @override
+  String get typeName => "kite.Nested";
+
+  @override
+  Nested fromJson(RestoreContext ctx, Map<String, dynamic> json) {
+    return Nested(
+      json["id"] as int,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(ParseContext ctx, Nested obj) {
+    return {
+      "id": obj.id,
+    };
+  }
+}
+
+class OuterDataAdapter extends DataAdapter<Outer> {
+  @override
+  String get typeName => "kite.Outer";
+
+  @override
+  Outer fromJson(RestoreContext ctx, Map<String, dynamic> json) {
+    return Outer(
+      ctx.restore2DListByTypeName(json["nested"]),
+      ctx.restoreNullable2DListByTypeName(json["string2d"]),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(ParseContext ctx, Outer obj) {
+    return {
+      "nested": ctx.parseTo2DList(obj.nested),
+      "string2d": ctx.parseToNullable2DList(obj.string2d),
     };
   }
 }

@@ -108,8 +108,11 @@ mixin IKiteConverter {
             }
           }
         } catch (e) {
-          assert(false, "Cannot parse object from json. $e");
-          return null;
+          if (strict) {
+            rethrow;
+          } else {
+            return null;
+          }
         }
       }
     }
@@ -386,7 +389,7 @@ class RestoreContext {
   }
 
   List<T?> restoreNullableListByTypeName<T>(List<dynamic> list) {
-    final res = <T?>[];
+    final List<T?> res = [];
     for (final obj in list) {
       res.add(obj != null
           ? (_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj))
@@ -396,7 +399,7 @@ class RestoreContext {
   }
 
   List<T> restoreListByTypeName<T>(List<dynamic> list) {
-    final res = <T>[];
+    final List<T> res = [];
     for (final obj in list) {
       res.add(_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj) as T);
     }
@@ -404,7 +407,7 @@ class RestoreContext {
   }
 
   List<T?> restoreNullableListByExactType<T>(List<dynamic> list) {
-    final res = <T?>[];
+    final List<T?> res = [];
     for (final obj in list) {
       res.add(obj != null
           ? (_isPrimitive(obj) ? obj : restoreByExactType<T>(obj))
@@ -414,9 +417,61 @@ class RestoreContext {
   }
 
   List<T> restoreListByExactType<T>(List<dynamic> list) {
-    final res = <T>[];
+    final List<T> res = [];
     for (final obj in list) {
       res.add(_isPrimitive(obj) ? obj : restoreByExactType<T>(obj) as T);
+    }
+    return res;
+  }
+
+  List<List<T?>> restoreNullable2DListByTypeName<T>(List<dynamic> list2d) {
+    final List<List<T?>> res = [];
+    for (final sublist in list2d) {
+      final List<T?> resSub = [];
+      res.add(resSub);
+      for (final obj in sublist as List<dynamic>) {
+        resSub.add(obj != null
+            ? (_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj))
+            : null);
+      }
+    }
+    return res;
+  }
+
+  List<List<T>> restore2DListByTypeName<T>(List<dynamic> list2d) {
+    final List<List<T>> res = [];
+    for (final sublist in list2d) {
+      final List<T> resSub = [];
+      res.add(resSub);
+      for (final obj in sublist as List<dynamic>) {
+        resSub.add(_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj) as T);
+      }
+    }
+    return res;
+  }
+
+  List<List<T?>> restoreNullable2DListByExactType<T>(List<dynamic> list2d) {
+    final List<List<T?>> res = [];
+    for (final sublist in list2d) {
+      final List<T?> resSub = [];
+      res.add(resSub);
+      for (final obj in sublist as List<dynamic>) {
+        resSub.add(obj != null
+            ? (_isPrimitive(obj) ? obj : restoreByExactType<T>(obj))
+            : null);
+      }
+    }
+    return res;
+  }
+
+  List<List<T>> restore2DListByExactType<T>(List<dynamic> list2d) {
+    final List<List<T>> res = [];
+    for (final sublist in list2d) {
+      final List<T> resSub = [];
+      res.add(resSub);
+      for (final obj in sublist as List<dynamic>) {
+        resSub.add(_isPrimitive(obj) ? obj : restoreByExactType<T>(obj) as T);
+      }
     }
     return res;
   }
@@ -487,14 +542,24 @@ class ParseContext {
     }
   }
 
-  List<Map<String, dynamic>> parseToList<T>(List<T> list) {
-    return list.map((e) => parseToJson(e)).toList(growable: false);
+  List<dynamic> parseToList<T>(List<T> list) {
+    return list
+        .map((e) => _isPrimitive(e) ? e : parseToJson(e))
+        .toList(growable: false);
   }
 
-  List<Map<String, dynamic>?> parseToNullableList<T>(List<T?> list) {
+  List<dynamic> parseToNullableList<T>(List<T?> list) {
     return list
-        .map((e) => e != null ? parseToJson(e) : null)
+        .map((e) => e != null ? (_isPrimitive(e) ? e : parseToJson(e)) : null)
         .toList(growable: false);
+  }
+
+  List<List<dynamic>> parseTo2DList<T>(List<List<T>> list) {
+    return list.map((e) => parseToList(e)).toList(growable: false);
+  }
+
+  List<List<dynamic>> parseToNullable2DList<T>(List<List<T?>> list) {
+    return list.map((e) => (parseToNullableList(e))).toList(growable: false);
   }
 
   Map<dynamic, dynamic> parseToMap<TV>(Map<dynamic, TV> map) {
