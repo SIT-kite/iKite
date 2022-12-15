@@ -89,7 +89,8 @@ void main() {
   }
 }
     """;
-      final group = parser.restoreByTypeName<LearningGroup>(rawJson);
+      final group =
+          parser.restoreByTypeName<LearningGroup>(rawJson, strict: true);
       assert(group != null);
       assert(group!.c.firstName == "Justice");
     });
@@ -145,7 +146,7 @@ void main() {
   ]
 }
       """;
-      final course = parser.restoreByTypeName(rawJson);
+      final course = parser.restoreByTypeName(rawJson, strict: true);
       assert(course != null);
       assert(course!.name == "Compiler");
       assert(course!.groups.length == 2);
@@ -154,25 +155,23 @@ void main() {
   });
 
   group("Test Adapter convert object to json and back", () {
+    final parser = Parser();
+    parser.registerAdapter(StudentDataAdapter());
+    parser.registerAdapter(LearningGroupByTypeNameDataAdapter());
+    parser.registerAdapter(CourseDataAdapter());
+    parser.registerAdapter(FreshmanDataAdapter());
     test("Convert Student to json and back", () {
-      final parser = Parser();
-      parser.registerAdapter(StudentDataAdapter());
       final a = Student("Narcisse", "Chan", "NarcisseChan@kite.com");
-      final json = parser.parseToJson(a);
+      final json = parser.parseToJson(a, strict: true);
       assert(json != null);
       assert(json!.contains("NarcisseChan@kite.com"));
 
-      final restored = parser.restoreByExactType<Student>(json!);
+      final restored = parser.restoreByExactType<Student>(json!, strict: true);
       assert(restored != null);
       assert(restored!.firstName == "Narcisse");
     });
 
     test("Convert Course to json and back", () {
-      final parser = Parser();
-      parser.registerAdapter(StudentDataAdapter());
-      parser.registerAdapter(LearningGroupByExactTypeDataAdapter());
-      parser.registerAdapter(CourseDataAdapter());
-
       final c = Course("Compiler", [
         LearningGroup(
             Student("A1", "A2", "A@email.net"),
@@ -183,22 +182,22 @@ void main() {
             Student("Y1", "Y2", "Y@email.net"),
             Student("Z1", "Z2", "Z@email.net")),
       ]);
-      final json = parser.parseToJson(c);
+      final json = parser.parseToJson(c, strict: true);
       assert(json != null);
       assert(json!.contains("@versionMap"));
       assert(json!.contains("X@email.net"));
 
-      final restored = parser.restoreByTypeName<Course>(json!);
+      final restored = parser.restoreByTypeName<Course>(json!, strict: true);
       assert(restored != null);
       assert(restored!.groups[1].b.lastName == "Y2");
     });
   });
 
   group("Test Adapter convert json to object with migration", () {
+    Parser parser = Parser();
+    parser.registerAdapter(FreshmanDataAdapter());
+    parser.registerAdapter(CounselorDataAdapter());
     test("Migrate from 1 to 3", () {
-      final parser = Parser();
-      parser.registerAdapter(FreshmanDataAdapter());
-      parser.registerAdapter(CounselorDataAdapter());
       parser.registerMigration(
           Migration<Freshman>.of("kite.Freshman", to: 2, (old) {
         final names = (old["name"] as String).split(" ");
@@ -259,11 +258,38 @@ void main() {
   }
 }
     """;
-      final counselor = parser.restoreByExactType<Counselor>(rawJson);
+      final counselor =
+          parser.restoreByExactType<Counselor>(rawJson, strict: true);
       assert(counselor != null);
       assert(counselor!.students[1].lastName == "Ellery");
-      final reJson = parser.parseToJson(counselor!);
+      final reJson = parser.parseToJson(counselor!, strict: true);
       assert(reJson!.contains('"kite.Counselor":3,"kite.Freshman":3'));
+    });
+  });
+
+  group("Test restore and parse object with nullable list and map", () {
+    Parser parser = Parser();
+    List<Traveller?> travellers = [
+      Traveller("Tom", "A101"),
+      Traveller("Ben", "A105"),
+      null,
+      Traveller("John", "A112"),
+      null,
+      Traveller("John", "A112"),
+      Traveller("Dick", "A150"),
+      null,
+      Traveller("Ada", "A120"),
+    ];
+    parser.registerAdapter(TravellerDataAdapter());
+    parser.registerAdapter(AeroplaneDataAdapter());
+    test("Test nullable list", () {
+      final aeroplane = Aeroplane(travellers);
+      final json = parser.parseToJson(aeroplane, strict: true)!;
+      assert(json.contains("null"));
+      final restored =
+          parser.restoreByExactType<Aeroplane>(json, strict: true)!;
+      assert(restored.seats[2] == null);
+      assert(restored.seats[5]!.name == "John");
     });
   });
 }
@@ -371,7 +397,7 @@ class CourseDataAdapter extends DataAdapter<Course> {
   Course fromJson(RestoreContext ctx, Map<String, dynamic> json) {
     return Course(
       json["name"] as String,
-      ctx.restoreNonnullListByExactType<LearningGroup>(json["groups"]),
+      ctx.restoreListByExactType<LearningGroup>(json["groups"]),
     );
   }
 
@@ -380,7 +406,7 @@ class CourseDataAdapter extends DataAdapter<Course> {
     return {
       "@type": typeName,
       "name": obj.name,
-      "groups": ctx.parseToNonnullList(obj.groups),
+      "groups": ctx.parseToList(obj.groups),
     };
   }
 }
@@ -450,7 +476,7 @@ class CounselorDataAdapter extends DataAdapter<Counselor> {
   @override
   Counselor fromJson(RestoreContext ctx, Map<String, dynamic> json) {
     return Counselor(
-      ctx.restoreNonnullListByExactType(json["students"]),
+      ctx.restoreListByExactType(json["students"]),
       json["firstName"] as String,
       json["lastName"] as String,
     );
@@ -460,9 +486,64 @@ class CounselorDataAdapter extends DataAdapter<Counselor> {
   Map<String, dynamic> toJson(ParseContext ctx, Counselor obj) {
     return {
       "@type": typeName,
-      "students": ctx.parseToNonnullList(obj.students),
+      "students": ctx.parseToList(obj.students),
       "firstName": obj.firstName,
       "lastName": obj.lastName,
+    };
+  }
+}
+
+class Traveller {
+  final String name;
+  final String seat;
+
+  const Traveller(this.name, this.seat);
+}
+
+class TravellerDataAdapter extends DataAdapter<Traveller> {
+  @override
+  String get typeName => "kite.Traveller";
+
+  @override
+  Traveller fromJson(RestoreContext ctx, Map<String, dynamic> json) {
+    return Traveller(
+      json["name"] as String,
+      json["seat"] as String,
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(ParseContext ctx, Traveller obj) {
+    return {
+      "@type": typeName,
+      "name": obj.name,
+      "seat": obj.seat,
+    };
+  }
+}
+
+class Aeroplane {
+  final List<Traveller?> seats;
+
+  Aeroplane(this.seats);
+}
+
+class AeroplaneDataAdapter extends DataAdapter<Aeroplane> {
+  @override
+  String get typeName => "kite.Aeroplane";
+
+  @override
+  Aeroplane fromJson(RestoreContext ctx, Map<String, dynamic> json) {
+    return Aeroplane(
+      ctx.restoreNullableListByTypeName(json["seats"]),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(ParseContext ctx, Aeroplane obj) {
+    return {
+      "@type": typeName,
+      "seats": ctx.parseToNullableList(obj.seats),
     };
   }
 }

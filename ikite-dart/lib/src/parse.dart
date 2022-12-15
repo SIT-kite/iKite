@@ -59,7 +59,7 @@ mixin IKiteConverter {
   ///
   /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
   /// In debug mode, the assert will be failed.
-  T? restoreByTypeName<T>(String json) {
+  T? restoreByTypeName<T>(String json, {bool strict = false}) {
     final dynamic jObject;
     try {
       jObject = jsonDecode(json);
@@ -94,6 +94,7 @@ mixin IKiteConverter {
                 _type2Adapters,
                 _name2Migrations,
                 versions,
+                strict: strict,
               );
               final version = versions[rootAdapter.typeName];
               assert(version != null,
@@ -130,7 +131,7 @@ mixin IKiteConverter {
   ///
   /// Return the object of exact [T] if it succeeded. Otherwise, null will be returned.
   /// In debug mode, the assert will be failed.
-  T? restoreByExactType<T>(String json) {
+  T? restoreByExactType<T>(String json, {bool strict = false}) {
     final dynamic jObject;
     try {
       jObject = jsonDecode(json);
@@ -161,6 +162,7 @@ mixin IKiteConverter {
               _type2Adapters,
               _name2Migrations,
               versions,
+              strict: strict,
             );
             final version = versions[rootAdapter.typeName];
             assert(version != null,
@@ -173,8 +175,11 @@ mixin IKiteConverter {
             return rootAdapter.fromJson(ctx, jMap);
           }
         } catch (e) {
-          assert(false, "Cannot parse object from json. $e");
-          return null;
+          if (strict) {
+            rethrow;
+          } else {
+            return null;
+          }
         }
       }
     }
@@ -186,7 +191,8 @@ mixin IKiteConverter {
   ///
   /// [enableTypeAnnotation]: When type annotation is enabled, the @type should be added in each json object.
   /// If so, the restoration can determine the type dynamically.
-  String? parseToJson<T>(T obj, {bool enableTypeAnnotation = true}) {
+  String? parseToJson<T>(T obj,
+      {bool enableTypeAnnotation = true, bool strict = false}) {
     final adapter = _type2Adapters[T];
     if (adapter is! DataAdapter<T>) {
       assert(false, 'Cannot find adapter of $T but $adapter.');
@@ -197,14 +203,18 @@ mixin IKiteConverter {
         _type2Adapters,
         versionMap,
         enableTypeAnnotation: enableTypeAnnotation,
+        strict: strict,
       );
       ctx.addToVersionMap(adapter);
       final Map<String, dynamic> json;
       try {
         json = adapter.toJson(ctx, obj);
       } catch (e) {
-        assert(false, 'Cannot convert $obj to json.');
-        return null;
+        if (strict) {
+          rethrow;
+        } else {
+          return null;
+        }
       }
       ctx.attachVersionMap(json);
       return jsonEncode(json);
@@ -286,13 +296,15 @@ class RestoreContext {
   final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, List<Migration>> _name2Migrations;
   final Map<String, int> _versionMap;
+  final bool strict;
 
   const RestoreContext(
     this._name2Adapters,
     this._type2Adapters,
     this._name2Migrations,
-    this._versionMap,
-  );
+    this._versionMap, {
+    this.strict = false,
+  });
 
   DataAdapter<T>? findAdapterOf<T>(String typeName) {
     final adapter = _name2Adapters[typeName];
@@ -371,12 +383,16 @@ class RestoreContext {
   List<T?> restoreNullableListByTypeName<T>(List<dynamic> list) {
     final res = <T?>[];
     for (final obj in list) {
-      res.add(restoreByTypeName<T>(obj));
+      if (obj != null) {
+        res.add(restoreByTypeName<T>(obj));
+      } else {
+        res.add(null);
+      }
     }
     return res;
   }
 
-  List<T> restoreNonnullListByTypeName<T>(List<dynamic> list) {
+  List<T> restoreListByTypeName<T>(List<dynamic> list) {
     final res = <T>[];
     for (final obj in list) {
       res.add(restoreByTypeName<T>(obj) as T);
@@ -387,12 +403,16 @@ class RestoreContext {
   List<T?> restoreNullableListByExactType<T>(List<dynamic> list) {
     final res = <T?>[];
     for (final obj in list) {
-      res.add(restoreByExactType<T>(obj));
+      if (obj != null) {
+        res.add(restoreByExactType<T>(obj));
+      } else {
+        res.add(null);
+      }
     }
     return res;
   }
 
-  List<T> restoreNonnullListByExactType<T>(List<dynamic> list) {
+  List<T> restoreListByExactType<T>(List<dynamic> list) {
     final res = <T>[];
     for (final obj in list) {
       res.add(restoreByExactType<T>(obj) as T);
@@ -404,13 +424,18 @@ class RestoreContext {
 class ParseContext {
   final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, int> _versionMap;
+  final bool strict;
 
   /// When type annotation is enabled, the @type should be added in each json object.
   /// If so, the restoration can determine the type dynamically.
   final bool enableTypeAnnotation;
 
-  const ParseContext(this._type2Adapters, this._versionMap,
-      {this.enableTypeAnnotation = true});
+  const ParseContext(
+    this._type2Adapters,
+    this._versionMap, {
+    this.enableTypeAnnotation = true,
+    this.strict = false,
+  });
 
   Map<String, dynamic> parseToJson<T>(T obj) {
     final adapter = _type2Adapters[T];
@@ -422,7 +447,7 @@ class ParseContext {
     }
   }
 
-  List<Map<String, dynamic>> parseToNonnullList<T>(List<T> list) {
+  List<Map<String, dynamic>> parseToList<T>(List<T> list) {
     return list.map((e) => parseToJson(e)).toList(growable: false);
   }
 
@@ -447,4 +472,7 @@ class NoSuchDataAdapterException implements Exception {
   final String message;
 
   const NoSuchDataAdapterException(this.message);
+
+  @override
+  String toString() => "NoSuchDataAdapterException($message)";
 }
