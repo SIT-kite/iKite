@@ -191,6 +191,7 @@ mixin IKiteConverter {
   ///
   /// [enableTypeAnnotation]: When type annotation is enabled, the @type should be added in each json object.
   /// If so, the restoration can determine the type dynamically.
+  /// For the root object, type annotation is inevitable.
   String? parseToJson<T>(
     T obj, {
     bool enableTypeAnnotation = true,
@@ -212,9 +213,7 @@ mixin IKiteConverter {
       final Map<String, dynamic> json;
       try {
         json = adapter.toJson(ctx, obj);
-        if (enableTypeAnnotation) {
-          json["@type"] = adapter.typeName;
-        }
+        json["@type"] = adapter.typeName;
       } catch (e) {
         if (strict) {
           rethrow;
