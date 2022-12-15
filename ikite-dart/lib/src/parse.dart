@@ -383,11 +383,9 @@ class RestoreContext {
   List<T?> restoreNullableListByTypeName<T>(List<dynamic> list) {
     final res = <T?>[];
     for (final obj in list) {
-      if (obj != null) {
-        res.add(restoreByTypeName<T>(obj));
-      } else {
-        res.add(null);
-      }
+      res.add(obj != null
+          ? (_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj))
+          : null);
     }
     return res;
   }
@@ -395,7 +393,7 @@ class RestoreContext {
   List<T> restoreListByTypeName<T>(List<dynamic> list) {
     final res = <T>[];
     for (final obj in list) {
-      res.add(restoreByTypeName<T>(obj) as T);
+      res.add(_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj) as T);
     }
     return res;
   }
@@ -403,11 +401,9 @@ class RestoreContext {
   List<T?> restoreNullableListByExactType<T>(List<dynamic> list) {
     final res = <T?>[];
     for (final obj in list) {
-      if (obj != null) {
-        res.add(restoreByExactType<T>(obj));
-      } else {
-        res.add(null);
-      }
+      res.add(obj != null
+          ? (_isPrimitive(obj) ? obj : restoreByExactType<T>(obj))
+          : null);
     }
     return res;
   }
@@ -415,8 +411,43 @@ class RestoreContext {
   List<T> restoreListByExactType<T>(List<dynamic> list) {
     final res = <T>[];
     for (final obj in list) {
-      res.add(restoreByExactType<T>(obj) as T);
+      res.add(_isPrimitive(obj) ? obj : restoreByExactType<T>(obj) as T);
     }
+    return res;
+  }
+
+  Map<TK, TV?> restoreNullableMapByTypeName<TK, TV>(Map<dynamic, dynamic> map) {
+    final res = <TK, TV?>{};
+    map.forEach((k, v) {
+      res[k as TK] =
+          v != null ? (_isPrimitive(v) ? v : restoreByTypeName<TV>(v)) : null;
+    });
+    return res;
+  }
+
+  Map<TK, TV> restoreMapByTypeName<TK, TV>(Map<dynamic, dynamic> map) {
+    final res = <TK, TV>{};
+    map.forEach((k, v) {
+      res[k as TK] = _isPrimitive(v) ? v : restoreByTypeName<TV>(v) as TV;
+    });
+    return res;
+  }
+
+  Map<TK, TV?> restoreNullableMapByExactType<TK, TV>(
+      Map<dynamic, dynamic> map) {
+    final res = <TK, TV?>{};
+    map.forEach((k, v) {
+      res[k as TK] =
+          v != null ? (_isPrimitive(v) ? v : restoreByExactType<TV>(v)) : null;
+    });
+    return res;
+  }
+
+  Map<TK, TV> restoreMapByExactType<TK, TV>(Map<dynamic, dynamic> map) {
+    final res = <TK, TV>{};
+    map.forEach((k, v) {
+      res[k as TK] = _isPrimitive(v) ? v : restoreByExactType<TV>(v) as TV;
+    });
     return res;
   }
 }
@@ -457,6 +488,15 @@ class ParseContext {
         .toList(growable: false);
   }
 
+  Map<dynamic, dynamic> parseToMap<TV>(Map<dynamic, TV> map) {
+    return map.map((k, v) => MapEntry(k, _isPrimitive(v) ? v : parseToJson(v)));
+  }
+
+  Map<dynamic, dynamic> parseToNullableMap<TV>(Map<dynamic, TV?> map) {
+    return map.map((k, v) =>
+        MapEntry(k, v != null ? (_isPrimitive(v) ? v : parseToJson(v)) : null));
+  }
+
   /// Add the [adapter.version] into the json.
   void addToVersionMap(DataAdapter adapter) {
     _versionMap[adapter.typeName] = adapter.version;
@@ -476,3 +516,6 @@ class NoSuchDataAdapterException implements Exception {
   @override
   String toString() => "NoSuchDataAdapterException($message)";
 }
+
+bool _isPrimitive(dynamic v) =>
+    v is int || v is bool || v is String || v is double;

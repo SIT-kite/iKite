@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:ikite/src/parse.dart';
 import 'package:test/test.dart';
 
@@ -275,13 +277,14 @@ void main() {
       null,
       Traveller("John", "A112"),
       null,
-      Traveller("John", "A112"),
+      Traveller("John", "A102"),
       Traveller("Dick", "A150"),
       null,
       Traveller("Ada", "A120"),
     ];
     parser.registerAdapter(TravellerDataAdapter());
     parser.registerAdapter(AeroplaneDataAdapter());
+    parser.registerAdapter(CheckInCounterDataAdapter());
     test("Test nullable list", () {
       final aeroplane = Aeroplane(travellers);
       final json = parser.parseToJson(aeroplane, strict: true)!;
@@ -290,6 +293,26 @@ void main() {
           parser.restoreByExactType<Aeroplane>(json, strict: true)!;
       assert(restored.seats[2] == null);
       assert(restored.seats[5]!.name == "John");
+    });
+
+    test("Test nullable map", () {
+      final counter = CheckInCounter({}, {
+        "A112": null,
+        "A102": 15,
+        "A105": 48,
+      });
+      counter.checkIn(travellers[0]!);
+      counter.checkIn(travellers[1]!);
+      counter.checkIn(travellers[3]!);
+      counter.checkIn(travellers[5]!);
+      final json = parser.parseToJson(counter, strict: true)!;
+      assert(json.contains("A112"));
+      assert(json.contains("48"));
+
+      final restored =
+          parser.restoreByExactType<CheckInCounter>(json, strict: true)!;
+      assert(restored.travellerId2Self["A102"]!.name == "John");
+      assert(restored.travellerId2Baggage["A102"] == 15);
     });
   });
 }
@@ -318,7 +341,7 @@ class StudentDataAdapter extends DataAdapter<Student> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Student obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "firstName": obj.firstName,
       "lastName": obj.lastName,
       "email": obj.email,
@@ -350,7 +373,7 @@ class LearningGroupByTypeNameDataAdapter extends DataAdapter<LearningGroup> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, LearningGroup obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "a": ctx.parseToJson(obj.a),
       "b": ctx.parseToJson(obj.b),
       "c": ctx.parseToJson(obj.c),
@@ -374,7 +397,7 @@ class LearningGroupByExactTypeDataAdapter extends DataAdapter<LearningGroup> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, LearningGroup obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "a": ctx.parseToJson(obj.a),
       "b": ctx.parseToJson(obj.b),
       "c": ctx.parseToJson(obj.c),
@@ -404,7 +427,7 @@ class CourseDataAdapter extends DataAdapter<Course> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Course obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "name": obj.name,
       "groups": ctx.parseToList(obj.groups),
     };
@@ -444,7 +467,7 @@ class FreshmanDataAdapter extends DataAdapter<Freshman> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Freshman obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "firstName": obj.firstName,
       "lastName": obj.lastName,
       "age": obj.age,
@@ -485,7 +508,7 @@ class CounselorDataAdapter extends DataAdapter<Counselor> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Counselor obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "students": ctx.parseToList(obj.students),
       "firstName": obj.firstName,
       "lastName": obj.lastName,
@@ -495,9 +518,9 @@ class CounselorDataAdapter extends DataAdapter<Counselor> {
 
 class Traveller {
   final String name;
-  final String seat;
+  final String id;
 
-  const Traveller(this.name, this.seat);
+  const Traveller(this.name, this.id);
 }
 
 class TravellerDataAdapter extends DataAdapter<Traveller> {
@@ -508,16 +531,16 @@ class TravellerDataAdapter extends DataAdapter<Traveller> {
   Traveller fromJson(RestoreContext ctx, Map<String, dynamic> json) {
     return Traveller(
       json["name"] as String,
-      json["seat"] as String,
+      json["id"] as String,
     );
   }
 
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Traveller obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "name": obj.name,
-      "seat": obj.seat,
+      "id": obj.id,
     };
   }
 }
@@ -542,8 +565,42 @@ class AeroplaneDataAdapter extends DataAdapter<Aeroplane> {
   @override
   Map<String, dynamic> toJson(ParseContext ctx, Aeroplane obj) {
     return {
-      "@type": typeName,
+      if (ctx.enableTypeAnnotation) "@type": typeName,
       "seats": ctx.parseToNullableList(obj.seats),
+    };
+  }
+}
+
+class CheckInCounter {
+  final Map<String, Traveller> travellerId2Self;
+  final Map<String, int?> travellerId2Baggage;
+
+  void checkIn(Traveller traveller) {
+    travellerId2Self[traveller.id] = traveller;
+  }
+
+  CheckInCounter(this.travellerId2Self, this.travellerId2Baggage);
+}
+
+class CheckInCounterDataAdapter extends DataAdapter<CheckInCounter> {
+  @override
+  String get typeName => "kite.CheckInCounter";
+
+  @override
+  CheckInCounter fromJson(RestoreContext ctx, Map<String, dynamic> json) {
+    return CheckInCounter(
+      ctx.restoreMapByTypeName(json["travellerId2Self"]),
+      ctx.restoreNullableMapByExactType<String, int>(
+          json["travellerId2Baggage"]),
+    );
+  }
+
+  @override
+  Map<String, dynamic> toJson(ParseContext ctx, CheckInCounter obj) {
+    return {
+      if (ctx.enableTypeAnnotation) "@type": typeName,
+      "travellerId2Self": ctx.parseToMap(obj.travellerId2Self),
+      "travellerId2Baggage": ctx.parseToNullableMap(obj.travellerId2Baggage),
     };
   }
 }
