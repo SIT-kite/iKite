@@ -1,6 +1,4 @@
-import 'dart:convert';
-
-import 'package:ikite/src/parse.dart';
+import 'package:ikite/ikite.dart';
 import 'package:test/test.dart';
 
 class Parser with IKiteConverter {}

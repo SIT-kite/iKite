@@ -1,4 +1,4 @@
-import 'dart:convert';
+part of '../ikite.dart';
 
 /// [IKiteConverter] mixin is used to convert object from/to json.
 mixin IKiteConverter {
