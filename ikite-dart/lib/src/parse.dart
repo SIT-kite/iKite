@@ -392,7 +392,7 @@ class RestoreContext {
     final List<T?> res = [];
     for (final obj in list) {
       res.add(obj != null
-          ? (_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj))
+          ? (_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj))
           : null);
     }
     return res;
@@ -401,7 +401,7 @@ class RestoreContext {
   List<T> restoreListByTypeName<T>(List<dynamic> list) {
     final List<T> res = [];
     for (final obj in list) {
-      res.add(_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj) as T);
+      res.add(_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj) as T);
     }
     return res;
   }
@@ -410,7 +410,7 @@ class RestoreContext {
     final List<T?> res = [];
     for (final obj in list) {
       res.add(obj != null
-          ? (_isPrimitive(obj) ? obj : restoreByExactType<T>(obj))
+          ? (_isPrimitive(obj) ? obj as T: restoreByExactType<T>(obj))
           : null);
     }
     return res;
@@ -419,7 +419,7 @@ class RestoreContext {
   List<T> restoreListByExactType<T>(List<dynamic> list) {
     final List<T> res = [];
     for (final obj in list) {
-      res.add(_isPrimitive(obj) ? obj : restoreByExactType<T>(obj) as T);
+      res.add(_isPrimitive(obj) ? obj as T: restoreByExactType<T>(obj) as T);
     }
     return res;
   }
@@ -431,7 +431,7 @@ class RestoreContext {
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
         resSub.add(obj != null
-            ? (_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj))
+            ? (_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj))
             : null);
       }
     }
@@ -444,7 +444,7 @@ class RestoreContext {
       final List<T> resSub = [];
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
-        resSub.add(_isPrimitive(obj) ? obj : restoreByTypeName<T>(obj) as T);
+        resSub.add(_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj) as T);
       }
     }
     return res;
@@ -457,7 +457,7 @@ class RestoreContext {
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
         resSub.add(obj != null
-            ? (_isPrimitive(obj) ? obj : restoreByExactType<T>(obj))
+            ? (_isPrimitive(obj) ? obj as T: restoreByExactType<T>(obj))
             : null);
       }
     }
@@ -470,7 +470,7 @@ class RestoreContext {
       final List<T> resSub = [];
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
-        resSub.add(_isPrimitive(obj) ? obj : restoreByExactType<T>(obj) as T);
+        resSub.add(_isPrimitive(obj) ? obj  as T: restoreByExactType<T>(obj) as T);
       }
     }
     return res;
@@ -480,7 +480,7 @@ class RestoreContext {
     final res = <TK, TV?>{};
     map.forEach((k, v) {
       res[k as TK] =
-          v != null ? (_isPrimitive(v) ? v : restoreByTypeName<TV>(v)) : null;
+          v != null ? (_isPrimitive(v) ? v as TV : restoreByTypeName<TV>(v)) : null;
     });
     return res;
   }
@@ -488,7 +488,7 @@ class RestoreContext {
   Map<TK, TV> restoreMapByTypeName<TK, TV>(Map<dynamic, dynamic> map) {
     final res = <TK, TV>{};
     map.forEach((k, v) {
-      res[k as TK] = _isPrimitive(v) ? v : restoreByTypeName<TV>(v) as TV;
+      res[k as TK] = _isPrimitive(v) ? v as TV : restoreByTypeName<TV>(v) as TV;
     });
     return res;
   }
@@ -498,7 +498,7 @@ class RestoreContext {
     final res = <TK, TV?>{};
     map.forEach((k, v) {
       res[k as TK] =
-          v != null ? (_isPrimitive(v) ? v : restoreByExactType<TV>(v)) : null;
+          v != null ? (_isPrimitive(v) ? v as TV : restoreByExactType<TV>(v)) : null;
     });
     return res;
   }
@@ -506,7 +506,7 @@ class RestoreContext {
   Map<TK, TV> restoreMapByExactType<TK, TV>(Map<dynamic, dynamic> map) {
     final res = <TK, TV>{};
     map.forEach((k, v) {
-      res[k as TK] = _isPrimitive(v) ? v : restoreByExactType<TV>(v) as TV;
+      res[k as TK] = _isPrimitive(v) ? v as TV : restoreByExactType<TV>(v) as TV;
     });
     return res;
   }
@@ -544,13 +544,13 @@ class ParseContext {
 
   List<dynamic> parseToList<T>(List<T> list) {
     return list
-        .map((e) => _isPrimitive(e) ? e : parseToJson(e))
+        .map((e) => _isPrimitive(e) ? e: parseToJson(e))
         .toList(growable: false);
   }
 
   List<dynamic> parseToNullableList<T>(List<T?> list) {
     return list
-        .map((e) => e != null ? (_isPrimitive(e) ? e : parseToJson(e)) : null)
+        .map((e) => e != null ? (_isPrimitive(e) ? e as T?: parseToJson(e)) : null)
         .toList(growable: false);
   }
 
