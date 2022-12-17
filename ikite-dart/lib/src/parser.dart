@@ -1,10 +1,14 @@
 part of '../ikite.dart';
 
 /// [IKiteConverter] mixin is used to convert object from/to json.
-mixin IKiteConverter {
+mixin IKiteConverter implements IKiteDebugOptions {
   final Map<String, DataAdapter> _name2Adapters = {};
   final Map<Type, DataAdapter> _type2Adapters = {};
   final Map<String, List<Migration>> _name2Migrations = {};
+
+  /// The debug migration will be performed every time before the [_name2Migrations] performed.
+  /// So you should clear this migration when it's done.
+  final Map<String, Migration> _debugMigration = {};
 
   /// Register the [adapter].
   /// If the [adapter.typeName] was registered, the old one will be overridden.
@@ -41,6 +45,18 @@ mixin IKiteConverter {
           ? migrations.any((m) => m.migrateTo == to)
           : false;
     }
+  }
+
+  void registerDebugMigration<T>(Migration<T> migration) {
+    _debugMigration[migration.typeName] = migration;
+  }
+
+  void removeDebugMigration(String typeName) {
+    _debugMigration.remove(typeName);
+  }
+
+  void clearDebugMigration() {
+    _debugMigration.clear();
   }
 
   /// Restore an object of [T] from an json object by its type name.
@@ -94,15 +110,25 @@ mixin IKiteConverter {
                 _type2Adapters,
                 _name2Migrations,
                 versions,
+                isDebug ? _debugMigration : null,
                 strict: strict,
               );
               final version = versions[rootAdapter.typeName];
               assert(version != null,
                   "${rootAdapter.typeName} is not in version map.");
               var jMap = jObject.cast<String, dynamic>();
+              jMap = _tryDoDebugMigration(
+                _debugMigration,
+                from: jMap,
+                by: rootAdapter.typeName,
+              );
               if (version != null && version < rootAdapter.version) {
-                jMap = _doMigration(_name2Migrations,
-                    from: jMap, by: rootAdapter.typeName);
+                jMap = _doMigrations(
+                  _name2Migrations,
+                  currentVersion: version,
+                  from: jMap,
+                  by: rootAdapter.typeName,
+                );
               }
               return rootAdapter.fromJson(ctx, jMap);
             }
@@ -165,15 +191,25 @@ mixin IKiteConverter {
               _type2Adapters,
               _name2Migrations,
               versions,
+              isDebug ? _debugMigration : null,
               strict: strict,
             );
             final version = versions[rootAdapter.typeName];
             assert(version != null,
                 "${rootAdapter.typeName} is not in version map.");
             var jMap = jObject.cast<String, dynamic>();
+            jMap = _tryDoDebugMigration(
+              _debugMigration,
+              from: jMap,
+              by: rootAdapter.typeName,
+            );
             if (version != null && version < rootAdapter.version) {
-              jMap = _doMigration(_name2Migrations,
-                  from: jMap, by: rootAdapter.typeName);
+              jMap = _doMigrations(
+                _name2Migrations,
+                currentVersion: version,
+                from: jMap,
+                by: rootAdapter.typeName,
+              );
             }
             return rootAdapter.fromJson(ctx, jMap);
           }
@@ -282,17 +318,54 @@ class _MigrationDelegateImpl<T> implements Migration<T> {
 }
 
 /// Perform the migrations until the latest version in sequence.
-Map<String, dynamic> _doMigration(
+Map<String, dynamic> _doMigrations(
   Map<String, List<Migration>> name2Migrations, {
   required Map<String, dynamic> from,
+  required int currentVersion,
   required String by,
 }) {
   final migrations = name2Migrations[by];
   assert(migrations != null, "No such migration of $by.");
   if (migrations != null) {
     for (final migration in migrations) {
+      if (migration.migrateTo > currentVersion) {
+        from = migration.migrate(from);
+      }
+    }
+    return from;
+  } else {
+    return from;
+  }
+}
+
+/// Perform the migrations until the latest version in sequence.
+Map<String, dynamic> _doMigration(
+  Map<String, Migration> name2Migration, {
+  required Map<String, dynamic> from,
+  required int currentVersion,
+  required String by,
+}) {
+  final migration = name2Migration[by];
+  assert(migration != null, "No such migration of $by.");
+  if (migration != null) {
+    if (migration.migrateTo > currentVersion) {
       from = migration.migrate(from);
     }
+    return from;
+  } else {
+    return from;
+  }
+}
+
+Map<String, dynamic> _tryDoDebugMigration(
+  Map<String, Migration>? name2Migration, {
+  required Map<String, dynamic> from,
+  required String by,
+}) {
+  if (name2Migration == null) return from;
+  final migration = name2Migration[by];
+  if (migration != null) {
+    from = migration.migrate(from);
     return from;
   } else {
     return from;
@@ -303,6 +376,7 @@ class RestoreContext {
   final Map<String, DataAdapter> _name2Adapters;
   final Map<Type, DataAdapter> _type2Adapters;
   final Map<String, List<Migration>> _name2Migrations;
+  final Map<String, Migration>? _name2DebugMigration;
   final Map<String, int> _versionMap;
   final bool strict;
 
@@ -310,7 +384,8 @@ class RestoreContext {
     this._name2Adapters,
     this._type2Adapters,
     this._name2Migrations,
-    this._versionMap, {
+    this._versionMap,
+    this._name2DebugMigration, {
     this.strict = false,
   });
 
@@ -347,8 +422,18 @@ class RestoreContext {
     if (adapter != null) {
       final version = _versionMap[adapter.typeName];
       assert(version != null, "${adapter.typeName} is not in version map.");
+      json = _tryDoDebugMigration(
+        _name2DebugMigration,
+        from: json,
+        by: adapter.typeName,
+      );
       if (version != null && version < adapter.version) {
-        json = _doMigration(_name2Migrations, from: json, by: adapter.typeName);
+        json = _doMigrations(
+          _name2Migrations,
+          from: json,
+          currentVersion: version,
+          by: adapter.typeName,
+        );
       }
       final res = adapter.fromJson(this, json);
       if (res is T) {
@@ -372,9 +457,18 @@ class RestoreContext {
       if (adapter != null) {
         final version = _versionMap[adapter.typeName];
         assert(version != null, "${adapter.typeName} is not in version map.");
+        json = _tryDoDebugMigration(
+          _name2DebugMigration,
+          from: json,
+          by: adapter.typeName,
+        );
         if (version != null && version < adapter.version) {
-          json =
-              _doMigration(_name2Migrations, from: json, by: adapter.typeName);
+          json = _doMigrations(
+            _name2Migrations,
+            from: json,
+            currentVersion: version,
+            by: adapter.typeName,
+          );
         }
         final res = adapter.fromJson(this, json);
         if (res is T) {
@@ -392,7 +486,7 @@ class RestoreContext {
     final List<T?> res = [];
     for (final obj in list) {
       res.add(obj != null
-          ? (_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj))
+          ? (_isPrimitive(obj) ? obj as T : restoreByTypeName<T>(obj))
           : null);
     }
     return res;
@@ -401,7 +495,7 @@ class RestoreContext {
   List<T> restoreListByTypeName<T>(List<dynamic> list) {
     final List<T> res = [];
     for (final obj in list) {
-      res.add(_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj) as T);
+      res.add(_isPrimitive(obj) ? obj as T : restoreByTypeName<T>(obj) as T);
     }
     return res;
   }
@@ -410,7 +504,7 @@ class RestoreContext {
     final List<T?> res = [];
     for (final obj in list) {
       res.add(obj != null
-          ? (_isPrimitive(obj) ? obj as T: restoreByExactType<T>(obj))
+          ? (_isPrimitive(obj) ? obj as T : restoreByExactType<T>(obj))
           : null);
     }
     return res;
@@ -419,7 +513,7 @@ class RestoreContext {
   List<T> restoreListByExactType<T>(List<dynamic> list) {
     final List<T> res = [];
     for (final obj in list) {
-      res.add(_isPrimitive(obj) ? obj as T: restoreByExactType<T>(obj) as T);
+      res.add(_isPrimitive(obj) ? obj as T : restoreByExactType<T>(obj) as T);
     }
     return res;
   }
@@ -431,7 +525,7 @@ class RestoreContext {
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
         resSub.add(obj != null
-            ? (_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj))
+            ? (_isPrimitive(obj) ? obj as T : restoreByTypeName<T>(obj))
             : null);
       }
     }
@@ -444,7 +538,8 @@ class RestoreContext {
       final List<T> resSub = [];
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
-        resSub.add(_isPrimitive(obj) ? obj as T: restoreByTypeName<T>(obj) as T);
+        resSub
+            .add(_isPrimitive(obj) ? obj as T : restoreByTypeName<T>(obj) as T);
       }
     }
     return res;
@@ -457,7 +552,7 @@ class RestoreContext {
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
         resSub.add(obj != null
-            ? (_isPrimitive(obj) ? obj as T: restoreByExactType<T>(obj))
+            ? (_isPrimitive(obj) ? obj as T : restoreByExactType<T>(obj))
             : null);
       }
     }
@@ -470,7 +565,8 @@ class RestoreContext {
       final List<T> resSub = [];
       res.add(resSub);
       for (final obj in sublist as List<dynamic>) {
-        resSub.add(_isPrimitive(obj) ? obj  as T: restoreByExactType<T>(obj) as T);
+        resSub.add(
+            _isPrimitive(obj) ? obj as T : restoreByExactType<T>(obj) as T);
       }
     }
     return res;
@@ -479,8 +575,9 @@ class RestoreContext {
   Map<TK, TV?> restoreNullableMapByTypeName<TK, TV>(Map<dynamic, dynamic> map) {
     final res = <TK, TV?>{};
     map.forEach((k, v) {
-      res[k as TK] =
-          v != null ? (_isPrimitive(v) ? v as TV : restoreByTypeName<TV>(v)) : null;
+      res[k as TK] = v != null
+          ? (_isPrimitive(v) ? v as TV : restoreByTypeName<TV>(v))
+          : null;
     });
     return res;
   }
@@ -497,8 +594,9 @@ class RestoreContext {
       Map<dynamic, dynamic> map) {
     final res = <TK, TV?>{};
     map.forEach((k, v) {
-      res[k as TK] =
-          v != null ? (_isPrimitive(v) ? v as TV : restoreByExactType<TV>(v)) : null;
+      res[k as TK] = v != null
+          ? (_isPrimitive(v) ? v as TV : restoreByExactType<TV>(v))
+          : null;
     });
     return res;
   }
@@ -506,7 +604,8 @@ class RestoreContext {
   Map<TK, TV> restoreMapByExactType<TK, TV>(Map<dynamic, dynamic> map) {
     final res = <TK, TV>{};
     map.forEach((k, v) {
-      res[k as TK] = _isPrimitive(v) ? v as TV : restoreByExactType<TV>(v) as TV;
+      res[k as TK] =
+          _isPrimitive(v) ? v as TV : restoreByExactType<TV>(v) as TV;
     });
     return res;
   }
@@ -544,13 +643,14 @@ class ParseContext {
 
   List<dynamic> parseToList<T>(List<T> list) {
     return list
-        .map((e) => _isPrimitive(e) ? e: parseToJson(e))
+        .map((e) => _isPrimitive(e) ? e : parseToJson(e))
         .toList(growable: false);
   }
 
   List<dynamic> parseToNullableList<T>(List<T?> list) {
     return list
-        .map((e) => e != null ? (_isPrimitive(e) ? e as T?: parseToJson(e)) : null)
+        .map((e) =>
+            e != null ? (_isPrimitive(e) ? e as T? : parseToJson(e)) : null)
         .toList(growable: false);
   }
 

@@ -1,7 +1,10 @@
 import 'package:ikite/ikite.dart';
 import 'package:test/test.dart';
 
-class Parser with IKiteConverter {}
+class Parser with IKiteConverter implements IKiteDebugOptions{
+  @override
+  bool get isDebug => true;
+}
 
 void main() {
   group('Test Adapter convert json to object', () {
